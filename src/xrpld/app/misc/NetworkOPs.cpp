@@ -1199,7 +1199,7 @@ NetworkOPsImp::submitTransaction(std::shared_ptr<STTx const> const& iTrans)
     beast::Journal journal{
         m_journal,
         log::attributes(
-            {{"TransactionID", to_string(iTrans->getTransactionID())}})};
+            log::attr("TransactionID", to_string(iTrans->getTransactionID())))};
     if (isNeedNetworkLedger())
     {
         // Nothing we can do if we've never been in sync
@@ -1266,7 +1266,7 @@ NetworkOPsImp::preProcessTransaction(std::shared_ptr<Transaction>& transaction)
 {
     beast::Journal journal{
         m_journal,
-        log::attributes({{"TransactionID", to_string(transaction->getID())}})};
+        log::attributes(log::attr("TransactionID", to_string(transaction->getID())))};
     auto const newFlags = app_.getHashRouter().getFlags(transaction->getID());
 
     if ((newFlags & HashRouterFlags::BAD) != HashRouterFlags::UNDEFINED)
