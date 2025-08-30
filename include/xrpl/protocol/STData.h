@@ -61,6 +61,7 @@ public:
     STData(SField const& n, STAmount const&);
     STData(SField const& n, STIssue const&);
     STData(SField const& n, STCurrency const&);
+    STData(SField const& n, STNumber const&);
 
     STData(SerialIter& sit, SField const& name);
 
@@ -118,6 +119,8 @@ public:
     setIssue(STIssue const&);
     void
     setCurrency(STCurrency const&);
+    void
+    setFieldNumber(STNumber const&);
 
     unsigned char
     getFieldU8() const;
@@ -145,6 +148,8 @@ public:
     getFieldIssue() const;
     STCurrency
     getFieldCurrency() const;
+    STNumber
+    getFieldNumber() const;
 
 private:
     STBase*

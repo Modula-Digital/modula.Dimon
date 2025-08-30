@@ -35,7 +35,12 @@ namespace ripple {
 XRPAmount
 ContractCall::calculateBaseFee(ReadView const& view, STTx const& tx)
 {
-    return Transactor::calculateBaseFee(view, tx);
+    XRPAmount extraFee{0};
+    if (auto const allowance = tx[~sfComputationAllowance]; allowance)
+    {
+        extraFee += (*allowance) * view.fees().gasPrice / MICRO_DROPS_PER_DROP;
+    }
+    return Transactor::calculateBaseFee(view, tx) + extraFee;
 }
 
 NotTEC

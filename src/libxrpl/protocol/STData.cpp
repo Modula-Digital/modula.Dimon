@@ -27,6 +27,7 @@
 #include <xrpl/protocol/STCurrency.h>
 #include <xrpl/protocol/STData.h>
 #include <xrpl/protocol/STIssue.h>
+#include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/detail/STVar.h>
 #include <xrpl/protocol/jss.h>
 
@@ -173,6 +174,14 @@ STData::STData(SField const& n, STCurrency const& v)
     setFieldUsingAssignment(v);
 }
 
+STData::STData(SField const& n, STNumber const& v)
+    : STBase(n)
+    , inner_type_(STI_NUMBER)
+    , data_(detail::STVar(detail::defaultObject, sfNumber))
+{
+    setFieldUsingAssignment(v);
+}
+
 STData::STData(SerialIter& sit, SField const& name)
     : STBase(name), data_(STBase{})
 {
@@ -231,6 +240,10 @@ STData::STData(SerialIter& sit, SField const& name)
         }
         case STI_CURRENCY: {
             data_ = detail::STVar(sit, sfBaseAsset);
+            break;
+        }
+        case STI_NUMBER: {
+            data_ = detail::STVar(sit, sfNumber);
             break;
         }
         default:
@@ -299,6 +312,9 @@ STData::size() const
             // const STCurrency& st_currency =
             // data_.get().downcast<STCurrency>();
             return 20;  // 20 bytes for currency
+        }
+        case STI_NUMBER: {
+            return sizeof(double);
         }
         default:
             Throw<std::runtime_error>("STData: unknown type");
@@ -383,6 +399,11 @@ STData::add(Serializer& s) const
             st_currency.add(s);
             break;
         }
+        case STI_NUMBER: {
+            STNumber const& st_number = data_.get().downcast<STNumber>();
+            st_number.add(s);
+            break;
+        }
         default:
             Throw<std::runtime_error>("STData: unknown type");
     }
@@ -446,6 +467,9 @@ STData::getInnerTypeString() const
             break;
         case STI_CURRENCY:
             inner_type_str = "CURRENCY";
+            break;
+        case STI_NUMBER:
+            inner_type_str = "NUMBER";
             break;
         // Add other known types as needed
         default:
@@ -596,6 +620,14 @@ STData::setCurrency(STCurrency const& v)
     setFieldUsingAssignment(v);
 }
 
+void
+STData::setFieldNumber(STNumber const& v)
+{
+    inner_type_ = STI_NUMBER;
+    data_ = detail::STVar(detail::defaultObject, sfNumber);
+    setFieldUsingAssignment(v);
+}
+
 unsigned char
 STData::getFieldU8() const
 {
@@ -677,6 +709,13 @@ STData::getFieldCurrency() const
 {
     static STCurrency const empty{};
     return getFieldByConstRef<STCurrency>(empty);
+}
+
+STNumber
+STData::getFieldNumber() const
+{
+    static STNumber const empty{};
+    return getFieldByConstRef<STNumber>(empty);
 }
 
 STData
@@ -960,6 +999,17 @@ dataFromJson(SField const& field, Json::Value const& v)
         {
             Throw<std::runtime_error>("STData: invalid data for CURRENCY");
         }
+    }
+    else if (typeStr == "NUMBER")
+    {
+        if (!value.isString())
+        {
+            Throw<std::runtime_error>("STData: expected string for NUMBER");
+        }
+
+        STNumber number = numberFromJson(field, value);
+        STData data(field, number);
+        return data;
     }
 
     // Handle unknown or unsupported type

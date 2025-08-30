@@ -364,6 +364,9 @@ public:
     set(STBase&& v);
 
     void
+    addFieldFromSlice(SField const& sfield, Slice const& data);
+
+    void
     setFieldU8(SField const& field, unsigned char);
     void
     setFieldU16(SField const& field, std::uint16_t);

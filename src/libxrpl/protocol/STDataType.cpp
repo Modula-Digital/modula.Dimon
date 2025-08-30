@@ -140,6 +140,9 @@ STDataType::getInnerTypeString() const
         case STI_CURRENCY:
             inner_type_str = "CURRENCY";
             break;
+        case STI_NUMBER:
+            inner_type_str = "NUMBER";
+            break;
         // Add other known types as needed
         default:
             inner_type_str = std::to_string(inner_type_);
@@ -253,6 +256,12 @@ dataTypeFromJson(SField const& field, Json::Value const& v)
     else if (typeStr == "CURRENCY")
     {
         typeId = STI_CURRENCY;
+        STDataType data(field, typeId);
+        return data;
+    }
+    else if (typeStr == "NUMBER")
+    {
+        typeId = STI_NUMBER;
         STDataType data(field, typeId);
         return data;
     }

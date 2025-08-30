@@ -76,7 +76,7 @@ struct ContractResult
     ripple::Keylet const contractSourceKeylet;
     ripple::Keylet const contractAccountKeylet;
     ripple::AccountID const contractAccount;
-    std::uint32_t const nextSequence;
+    std::uint32_t nextSequence;
     ripple::AccountID const otxnAccount;
     ripple::ExitType exitType = ripple::ExitType::ROLLBACK;
     int64_t exitCode{-1};

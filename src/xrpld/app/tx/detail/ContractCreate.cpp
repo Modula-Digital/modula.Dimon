@@ -196,6 +196,15 @@ ContractCreate::doApply()
     std::shared_ptr<SLE> sourceSle;
     bool isInstall = ctx_.tx.isFieldPresent(sfContractHash);
     auto contractHash = ctx_.tx[~sfContractHash];
+    ripple::Blob wasmBytes;
+    if (ctx_.tx.isFieldPresent(sfContractCode))
+    {
+        wasmBytes = ctx_.tx.getFieldVL(sfContractCode);
+        contractHash = ripple::sha512Half_s(ripple::Slice(wasmBytes.data(), wasmBytes.size()));
+        if (ctx_.view().exists(keylet::contractSource(*contractHash)))
+            isInstall = true;
+    }
+
     if (isInstall)
     {
         sourceSle = ctx_.view().peek(keylet::contractSource(*contractHash));
@@ -208,12 +217,7 @@ ContractCreate::doApply()
     }
     else
     {
-        ripple::Blob wasmBytes = ctx_.tx.getFieldVL(sfContractCode);
-        contractHash = ripple::sha512Half_s(
-            ripple::Slice(wasmBytes.data(), wasmBytes.size()));
-        sourceSle =
-            std::make_shared<SLE>(keylet::contractSource(*contractHash));
-
+        sourceSle = std::make_shared<SLE>(keylet::contractSource(*contractHash));
         sourceSle->at(sfContractHash) = *contractHash;
         sourceSle->at(sfContractCode) = makeSlice(wasmBytes);
         sourceSle->setFieldArray(

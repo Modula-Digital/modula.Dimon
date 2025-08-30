@@ -52,7 +52,7 @@ int64_t constexpr createByteMultiplier = 500ULL;
 int64_t constexpr feeCalculationFailed = 0x7FFFFFFFFFFFFFFFLL;
 
 /** The maximum number of contract parameters that can be in a transaction. */
-std::size_t constexpr maxContractParams = 12;
+std::size_t constexpr maxContractParams = 32;
 
 /** The maximum number of contract functions that can be in a transaction. */
 std::size_t constexpr maxContractFunctions = 12;

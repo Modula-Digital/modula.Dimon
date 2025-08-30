@@ -22,6 +22,7 @@
 #include <xrpld/app/tx/apply.h>
 
 #include <xrpl/protocol/STData.h>
+#include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/STTx.h>
 #include <xrpl/protocol/STParsedJSON.h>
 
@@ -150,6 +151,15 @@ getFieldDataFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
             //     // if (write_len != 48)
             //     //     return Unexpected(HostFunctionError::INVALID_PARAMS);
             // }
+            return Bytes{serialized.begin(), serialized.end()};
+        }
+        case STI_NUMBER: {
+            if (funcParam.getInnerSType() != STI_NUMBER)
+                return Unexpected(HostFunctionError::INVALID_PARAMS);
+            STNumber data = funcParam.getFieldNumber();
+            Serializer s;
+            data.add(s);
+            auto const& serialized = s.getData();
             return Bytes{serialized.begin(), serialized.end()};
         }
         default:
@@ -472,6 +482,7 @@ ContractHostFunctionsImpl::buildTxn(std::uint16_t const& txType)
 
     STParsedJSONObject parsed("txn", jv);
     contractCtx.built_txns.push_back(*parsed.object);
+    contractCtx.result.nextSequence += 1;
     return contractCtx.built_txns.size() - 1;
 }
 
@@ -479,7 +490,7 @@ Expected<int32_t, HostFunctionError>
 ContractHostFunctionsImpl::addTxnField(std::uint32_t const& index, SField const& field, Slice const& data)
 {
     // Get the transaction JSON
-    // auto& obj = contractCtx.built_txns[index];
+    auto& obj = contractCtx.built_txns[index];
     // std::cout << "Building Txn: " << obj << std::endl;
     std::cout << "Adding field: " << field.getName() << " with data size: " << data.size() << std::endl;
 
@@ -501,8 +512,7 @@ ContractHostFunctionsImpl::addTxnField(std::uint32_t const& index, SField const&
     if (!found)
         return Unexpected(HostFunctionError::FIELD_NOT_FOUND);
 
-    // Add the field to the transaction
-    // obj.set(field, data);
+    obj.addFieldFromSlice(field, data);
     return 0;
 }
 
@@ -517,6 +527,8 @@ ContractHostFunctionsImpl::emitTxn(std::shared_ptr<STTx const> const& stxPtr)
     auto tpTrans = std::make_shared<Transaction>(stxPtr, reason, app);
     if (tpTrans->getStatus() != NEW)
         return Unexpected(HostFunctionError::SUBMIT_TXN_FAILURE);
+
+    std::cout << "Emitting Txn: " << stxPtr->getJson(JsonOptions::none).toStyledString() << std::endl;
 
     // NOTE: SmartContract Txn Ordering
     // contractCtx.applyCtx.apply(tesSUCCESS);
