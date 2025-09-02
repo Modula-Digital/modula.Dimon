@@ -688,10 +688,9 @@ PeerImp::setTimer()
     }
     catch (boost::system::system_error const& e)
     {
-        JLOG(journal_.error()) << "setTimer: "
-                << log::param("ErrorCode", e.code())
-                << ", "
-                << log::param("ErrorMessage", e.what());
+        JLOG(journal_.error())
+            << "setTimer: " << log::param("ErrorCode", e.code()) << ", "
+            << log::param("ErrorMessage", e.what());
         return;
     }
     timer_.async_wait(bind_executor(
