@@ -240,7 +240,8 @@ InstanceWrapper::operator=(InstanceWrapper&& o)
     return *this;
 }
 
-InstanceWrapper::operator bool() const
+InstanceWrapper::
+operator bool() const
 {
     return static_cast<bool>(instance_);
 }
@@ -395,7 +396,8 @@ ModuleWrapper::operator=(ModuleWrapper&& o)
     return *this;
 }
 
-ModuleWrapper::operator bool() const
+ModuleWrapper::
+operator bool() const
 {
     return instanceWrap_;
 }
@@ -591,16 +593,6 @@ ModuleWrapper::addInstance(
     return 0;
 }
 
-// int
-// my_module_t::delInstance(int i)
-// {
-//     if (i >= mod_inst.size())
-//         return -1;
-//     if (!mod_inst[i])
-//         mod_inst[i] = my_mod_inst_t();
-//     return i;
-// }
-
 std::int64_t
 ModuleWrapper::getGas()
 {
@@ -609,17 +601,7 @@ ModuleWrapper::getGas()
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// void
-// WamrEngine::clearModules()
-// {
-//     modules.clear();
-//     store.reset();  // to free the memory before creating new store
-//     store = {wasm_store_new(engine.get()), &wasm_store_delete};
-// }
-
-WamrEngine::WamrEngine()
-    : engine_(wasm_engine_new(), &wasm_engine_delete)
-    , store_(nullptr, &wasm_store_delete)
+WamrEngine::WamrEngine() : engine_(wasm_engine_new(), &wasm_engine_delete)
 {
     wasm_runtime_set_default_running_mode(Mode_Interp);
     wasm_runtime_set_log_level(WASM_LOG_LEVEL_FATAL);
@@ -628,33 +610,36 @@ WamrEngine::WamrEngine()
 
 int
 WamrEngine::addModule(
+    ExecutionContext& ctx,
     Bytes const& wasmCode,
     bool instantiate,
     int64_t gas,
     std::vector<WasmImportFunc> const& imports)
 {
-    moduleWrap_.reset();
-    store_.reset();  // to free the memory before creating new store
-    store_ = {wasm_store_new(engine_.get()), &wasm_store_delete};
-    moduleWrap_ = std::make_unique<ModuleWrapper>(
-        store_.get(), wasmCode, instantiate, defMaxPages_, gas, imports, j_);
+    // Create store for this context
+    ctx.store = StorePtr{wasm_store_new(engine_.get()), &wasm_store_delete};
 
-    if (!moduleWrap_)
+    // Create module in this context's store
+    ctx.moduleWrap = std::make_unique<ModuleWrapper>(
+        ctx.store.get(), wasmCode, instantiate, defMaxPages_, gas, imports, j_);
+
+    if (!ctx.moduleWrap)
         throw std::runtime_error("can't create module wrapper");
 
-    return moduleWrap_ ? 0 : -1;
+    return ctx.moduleWrap ? 0 : -1;
 }
-
-// int
-// WamrEngine::addInstance()
-// {
-//     return module->addInstance(store.get(), defMaxPages);
-// }
 
 FuncInfo
 WamrEngine::getFunc(std::string_view funcName)
 {
-    return moduleWrap_->getFunc(funcName);
+    if (contextStack_.empty())
+        throw std::runtime_error("no execution context");
+
+    auto& ctx = contextStack_.top();
+    if (!ctx.moduleWrap)
+        throw std::runtime_error("no module in current context");
+
+    return ctx.moduleWrap->getFunc(funcName);
 }
 
 std::vector<wasm_val_t>
@@ -869,10 +854,10 @@ WamrEngine::run(
     beast::Journal j)
 {
     j_ = j;
-    wasm_runtime_set_log_level(
-        std::min(getLogLevel(j_.sink().threshold()), WASM_LOG_LEVEL_ERROR));
     try
     {
+        wasm_runtime_set_log_level(
+            std::min(getLogLevel(j_.sink().threshold()), WASM_LOG_LEVEL_ERROR));
         return runHlp(wasmCode, funcName, params, imports, hfs, gas);
     }
     catch (std::exception const& e)
@@ -895,55 +880,101 @@ WamrEngine::runHlp(
     HostFunctions* hfs,
     int64_t gas)
 {
-    // currently only 1 module support, possible parallel UT run
-    std::lock_guard<decltype(m_)> lg(m_);
+    // Recursive mutex allows the same thread to acquire lock multiple times
+    std::lock_guard<std::recursive_mutex> lg(m_);
 
-    // Create and instantiate the module.
-    if (!wasmCode.empty())
+    // Check call depth to prevent infinite recursion
+    int currentDepth = contextStack_.empty() ? 0 : contextStack_.top().depth;
+    if (currentDepth >= MAX_CALL_DEPTH)
     {
-        [[maybe_unused]] int const m = addModule(wasmCode, true, gas, imports);
+        return Unexpected<TER>(tecINTERNAL);  // tecCALL_DEPTH_EXCEEDED
     }
 
-    if (!moduleWrap_ || !moduleWrap_->instanceWrap_)
-        throw std::runtime_error("no instance");
+    // Create new execution context for this call
+    ExecutionContext ctx;
+    ctx.depth = currentDepth + 1;
+    ctx.gasLimit = gas;
 
-    if (hfs)
-        hfs->setRT(&getRT());
+    // Push context onto stack BEFORE creating module
+    contextStack_.push(std::move(ctx));
 
-    // Call main
-    auto const f = getFunc(!funcName.empty() ? funcName : "_start");
-    auto const* ftp = wasm_functype_params(f.second);
+    try
+    {
+        // Get reference to the context we just pushed
+        auto& currentCtx = contextStack_.top();
 
-    // not const because passed directly to wamr function (which accept non
-    // const)
-    auto p = convertParams(params);
+        // Create and instantiate the module in this context
+        if (!wasmCode.empty())
+        {
+            [[maybe_unused]] int const m =
+                addModule(currentCtx, wasmCode, true, gas, imports);
+        }
 
-    if (int const comp = compareParamTypes(ftp, p); comp >= 0)
-        throw std::runtime_error(
-            "invalid parameter type #" + std::to_string(comp));
+        if (!currentCtx.moduleWrap || !currentCtx.moduleWrap->instanceWrap_)
+        {
+            contextStack_.pop();
+            throw std::runtime_error("no instance");
+        }
 
-    auto const res = call<1>(f, p);
+        if (hfs)
+            hfs->setRT(&getRT());
 
-    if (res.f)
-        throw std::runtime_error("<" + std::string(funcName) + "> failure");
-    else if (!res.r.num_elems)
-        throw std::runtime_error(
-            "<" + std::string(funcName) + "> return nothing");
+        // Call main
+        auto const f = getFunc(!funcName.empty() ? funcName : "_start");
+        auto const* ftp = wasm_functype_params(f.second);
 
-    assert(res.r.data[0].kind == WASM_I32);
-    if (gas == -1)
-        gas = std::numeric_limits<decltype(gas)>::max();
-    WasmResult<int32_t> const ret{
-        res.r.data[0].of.i32, gas - moduleWrap_->getGas()};
+        // Convert parameters
+        auto p = convertParams(params);
 
-    // #ifdef DEBUG_OUTPUT
-    //     auto& j = std::cerr;
-    // #else
-    //     auto j = j_.debug();
-    // #endif
-    // j << "WAMR Res: " << ret.result << " cost: " << ret.cost << std::endl;
+        if (int const comp = compareParamTypes(ftp, p); comp >= 0)
+        {
+            contextStack_.pop();
+            throw std::runtime_error(
+                "invalid parameter type #" + std::to_string(comp));
+        }
 
-    return ret;
+        auto const res = call<1>(f, p);
+
+        if (res.f)
+        {
+            contextStack_.pop();
+            throw std::runtime_error("<" + std::string(funcName) + "> failure");
+        }
+        else if (!res.r.num_elems)
+        {
+            contextStack_.pop();
+            throw std::runtime_error(
+                "<" + std::string(funcName) + "> return nothing");
+        }
+
+        assert(res.r.data[0].kind == WASM_I32);
+        if (gas == -1)
+            gas = std::numeric_limits<decltype(gas)>::max();
+
+        // Calculate gas used in this context
+        currentCtx.gasUsed = gas - currentCtx.moduleWrap->getGas();
+
+        WasmResult<int32_t> const ret{res.r.data[0].of.i32, currentCtx.gasUsed};
+
+        // Pop context after successful execution
+        contextStack_.pop();
+
+        return ret;
+    }
+    catch (std::exception const& e)
+    {
+        // Make sure to pop context on error
+        if (!contextStack_.empty())
+            contextStack_.pop();
+        throw;
+    }
+    catch (...)
+    {
+        // Make sure to pop context on error
+        if (!contextStack_.empty())
+            contextStack_.pop();
+        throw;
+    }
 }
 
 NotTEC
@@ -980,27 +1011,54 @@ WamrEngine::checkHlp(
     std::vector<WasmParam> const& params,
     std::vector<WasmImportFunc> const& imports)
 {
-    // currently only 1 module support, possible parallel UT run
-    std::lock_guard<decltype(m_)> lg(m_);
+    // Recursive mutex allows nested calls
+    std::lock_guard<std::recursive_mutex> lg(m_);
 
-    // Create and instantiate the module.
-    if (wasmCode.empty())
-        throw std::runtime_error("empty nodule");
+    // Create temporary context for checking
+    ExecutionContext ctx;
+    ctx.depth = 0;
+    contextStack_.push(std::move(ctx));
 
-    int const m = addModule(wasmCode, true, -1, imports);
-    if ((m < 0) || !moduleWrap_ || !moduleWrap_->instanceWrap_)
-        throw std::runtime_error("no instance");
+    try
+    {
+        auto& currentCtx = contextStack_.top();
 
-    // Looking for a func and compare parameter types
-    auto const f = getFunc(!funcName.empty() ? funcName : "_start");
-    auto const* ftp = wasm_functype_params(f.second);
-    auto const p = convertParams(params);
+        // Create and instantiate the module
+        if (wasmCode.empty())
+        {
+            contextStack_.pop();
+            throw std::runtime_error("empty module");
+        }
 
-    if (int const comp = compareParamTypes(ftp, p); comp >= 0)
-        throw std::runtime_error(
-            "invalid parameter type #" + std::to_string(comp));
+        int const m = addModule(currentCtx, wasmCode, true, -1, imports);
+        if ((m < 0) || !currentCtx.moduleWrap ||
+            !currentCtx.moduleWrap->instanceWrap_)
+        {
+            contextStack_.pop();
+            throw std::runtime_error("no instance");
+        }
 
-    return tesSUCCESS;
+        // Looking for a func and compare parameter types
+        auto const f = getFunc(!funcName.empty() ? funcName : "_start");
+        auto const* ftp = wasm_functype_params(f.second);
+        auto const p = convertParams(params);
+
+        if (int const comp = compareParamTypes(ftp, p); comp >= 0)
+        {
+            contextStack_.pop();
+            throw std::runtime_error(
+                "invalid parameter type #" + std::to_string(comp));
+        }
+
+        contextStack_.pop();
+        return tesSUCCESS;
+    }
+    catch (...)
+    {
+        if (!contextStack_.empty())
+            contextStack_.pop();
+        throw;
+    }
 }
 
 std::int32_t
@@ -1013,21 +1071,34 @@ WamrEngine::initMaxPages(std::int32_t def)
 std::int64_t
 WamrEngine::getGas()
 {
-    return moduleWrap_ ? moduleWrap_->getGas() : 0;
+    if (contextStack_.empty())
+        return 0;
+
+    auto& ctx = contextStack_.top();
+    return ctx.moduleWrap ? ctx.moduleWrap->getGas() : 0;
 }
 
 wmem
 WamrEngine::getMem() const
 {
-    return moduleWrap_ ? moduleWrap_->getMem() : wmem();
+    if (contextStack_.empty())
+        throw std::runtime_error("no execution context");
+
+    auto& ctx = const_cast<WamrEngine*>(this)->contextStack_.top();
+    return ctx.moduleWrap ? ctx.moduleWrap->getMem() : wmem();
 }
 
 InstanceWrapper const&
 WamrEngine::getRT(int m, int i)
 {
-    if (!moduleWrap_)
+    if (contextStack_.empty())
+        throw std::runtime_error("no execution context");
+
+    auto& ctx = contextStack_.top();
+    if (!ctx.moduleWrap)
         throw std::runtime_error("no module");
-    return moduleWrap_->getInstance(i);
+
+    return ctx.moduleWrap->getInstance(i);
 }
 
 int32_t
@@ -1045,12 +1116,19 @@ WamrEngine::allocate(int32_t sz)
 wasm_trap_t*
 WamrEngine::newTrap(std::string_view txt)
 {
+    if (contextStack_.empty())
+        throw std::runtime_error("no execution context for trap");
+
+    auto& ctx = contextStack_.top();
+    if (!ctx.store)
+        throw std::runtime_error("no store in current context");
+
     wasm_message_t msg = WASM_EMPTY_VEC;
 
     if (!txt.empty())
         wasm_name_new(&msg, txt.size(), txt.data());
 
-    return wasm_trap_new(store_.get(), &msg);
+    return wasm_trap_new(ctx.store.get(), &msg);
 }
 
 beast::Journal

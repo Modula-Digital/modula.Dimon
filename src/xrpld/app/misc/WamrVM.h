@@ -23,6 +23,8 @@
 #include <wasm_c_api.h>
 #include <wasm_export.h>
 
+#include <stack>
+
 namespace ripple {
 
 struct WamrResult
@@ -66,6 +68,7 @@ struct WamrResult
 using ModulePtr = std::unique_ptr<wasm_module_t, decltype(&wasm_module_delete)>;
 using InstancePtr =
     std::unique_ptr<wasm_instance_t, decltype(&wasm_instance_delete)>;
+using StorePtr = std::unique_ptr<wasm_store_t, decltype(&wasm_store_delete)>;
 
 using FuncInfo = std::pair<wasm_func_t const*, wasm_functype_t const*>;
 
@@ -175,13 +178,35 @@ private:
 
 class WamrEngine
 {
+    // Execution context for nested calls
+    struct ExecutionContext
+    {
+        StorePtr store;
+        std::unique_ptr<ModuleWrapper> moduleWrap;
+        int64_t gasLimit;
+        int64_t gasUsed;
+        int depth;
+
+        ExecutionContext()
+            : store(nullptr, &wasm_store_delete)
+            , gasLimit(0)
+            , gasUsed(0)
+            , depth(0)
+        {
+        }
+    };
+
     std::unique_ptr<wasm_engine_t, decltype(&wasm_engine_delete)> engine_;
-    std::unique_ptr<wasm_store_t, decltype(&wasm_store_delete)> store_;
-    std::unique_ptr<ModuleWrapper> moduleWrap_;
+
+    // Stack of execution contexts for nested contract calls
+    std::stack<ExecutionContext> contextStack_;
+
     std::int32_t defMaxPages_ = -1;
     beast::Journal j_ = beast::Journal(beast::Journal::getNullSink());
 
-    std::mutex m_;  // 1 instance mutex
+    std::recursive_mutex m_;  // recursive mutex to allow nested calls
+
+    static constexpr int MAX_CALL_DEPTH = 10;  // Prevent infinite recursion
 
 public:
     WamrEngine();
@@ -245,22 +270,14 @@ private:
 
     int
     addModule(
+        ExecutionContext& ctx,
         Bytes const& wasmCode,
         bool instantiate,
         int64_t gas,
         std::vector<WasmImportFunc> const& imports);
+
     void
     clearModules();
-
-    // int  addInstance();
-
-    int32_t
-    runFunc(std::string_view const funcName, int32_t p);
-
-    int32_t
-    makeModule(
-        Bytes const& wasmCode,
-        wasm_extern_vec_t const& imports = WASM_EMPTY_VEC);
 
     FuncInfo
     getFunc(std::string_view funcName);
