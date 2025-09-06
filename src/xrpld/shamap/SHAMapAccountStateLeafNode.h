@@ -51,10 +51,10 @@ public:
     {
     }
 
-    intr_ptr::SharedPtr<SHAMapTreeNode>
+    std::shared_ptr<SHAMapTreeNode>
     clone(std::uint32_t cowid) const final override
     {
-        return intr_ptr::make_shared<SHAMapAccountStateLeafNode>(
+        return std::make_shared<SHAMapAccountStateLeafNode>(
             item_, cowid, hash_);
     }
 

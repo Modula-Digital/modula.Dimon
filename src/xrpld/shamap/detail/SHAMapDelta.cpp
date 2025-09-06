@@ -19,7 +19,6 @@
 
 #include <xrpld/shamap/SHAMap.h>
 
-#include <xrpl/basics/IntrusivePointer.ipp>
 #include <xrpl/basics/contract.h>
 
 #include <array>
@@ -243,28 +242,28 @@ SHAMap::walkMap(std::vector<SHAMapMissingNode>& missingNodes, int maxMissing)
     if (!root_->isInner())  // root_ is only node, and we have it
         return;
 
-    using StackEntry = intr_ptr::SharedPtr<SHAMapInnerNode>;
+    using StackEntry = std::shared_ptr<SHAMapInnerNode>;
     std::stack<StackEntry, std::vector<StackEntry>> nodeStack;
 
-    nodeStack.push(intr_ptr::static_pointer_cast<SHAMapInnerNode>(root_));
+    nodeStack.push(std::static_pointer_cast<SHAMapInnerNode>(root_));
 
     while (!nodeStack.empty())
     {
-        intr_ptr::SharedPtr<SHAMapInnerNode> node = std::move(nodeStack.top());
+        std::shared_ptr<SHAMapInnerNode> node = std::move(nodeStack.top());
         nodeStack.pop();
 
         for (int i = 0; i < 16; ++i)
         {
             if (!node->isEmptyBranch(i))
             {
-                intr_ptr::SharedPtr<SHAMapTreeNode> nextNode =
-                    descendNoStore(*node, i);
+                std::shared_ptr<SHAMapTreeNode> nextNode =
+                    descendNoStore(node, i);
 
                 if (nextNode)
                 {
                     if (nextNode->isInner())
                         nodeStack.push(
-                            intr_ptr::static_pointer_cast<SHAMapInnerNode>(
+                            std::static_pointer_cast<SHAMapInnerNode>(
                                 nextNode));
                 }
                 else
@@ -286,15 +285,15 @@ SHAMap::walkMapParallel(
     if (!root_->isInner())  // root_ is only node, and we have it
         return false;
 
-    using StackEntry = intr_ptr::SharedPtr<SHAMapInnerNode>;
-    std::array<intr_ptr::SharedPtr<SHAMapTreeNode>, 16> topChildren;
+    using StackEntry = std::shared_ptr<SHAMapInnerNode>;
+    std::array<std::shared_ptr<SHAMapTreeNode>, 16> topChildren;
     {
         auto const& innerRoot =
-            intr_ptr::static_pointer_cast<SHAMapInnerNode>(root_);
+            std::static_pointer_cast<SHAMapInnerNode>(root_);
         for (int i = 0; i < 16; ++i)
         {
             if (!innerRoot->isEmptyBranch(i))
-                topChildren[i] = descendNoStore(*innerRoot, i);
+                topChildren[i] = descendNoStore(innerRoot, i);
         }
     }
     std::vector<std::thread> workers;
@@ -315,7 +314,7 @@ SHAMap::walkMapParallel(
             continue;
 
         nodeStacks[rootChildIndex].push(
-            intr_ptr::static_pointer_cast<SHAMapInnerNode>(child));
+            std::static_pointer_cast<SHAMapInnerNode>(child));
 
         JLOG(journal_.debug()) << "starting worker " << rootChildIndex;
         workers.push_back(std::thread(
@@ -325,7 +324,7 @@ SHAMap::walkMapParallel(
                 {
                     while (!nodeStack.empty())
                     {
-                        intr_ptr::SharedPtr<SHAMapInnerNode> node =
+                        std::shared_ptr<SHAMapInnerNode> node =
                             std::move(nodeStack.top());
                         XRPL_ASSERT(
                             node,
@@ -336,15 +335,14 @@ SHAMap::walkMapParallel(
                         {
                             if (node->isEmptyBranch(i))
                                 continue;
-                            intr_ptr::SharedPtr<SHAMapTreeNode> nextNode =
-                                descendNoStore(*node, i);
+                            std::shared_ptr<SHAMapTreeNode> nextNode =
+                                descendNoStore(node, i);
 
                             if (nextNode)
                             {
                                 if (nextNode->isInner())
-                                    nodeStack.push(
-                                        intr_ptr::static_pointer_cast<
-                                            SHAMapInnerNode>(nextNode));
+                                    nodeStack.push(std::static_pointer_cast<
+                                                   SHAMapInnerNode>(nextNode));
                             }
                             else
                             {
