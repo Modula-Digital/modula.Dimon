@@ -89,7 +89,6 @@ struct ContractResult
 struct ContractContext
 {
     ripple::ApplyContext& applyCtx;
-    OpenView& openView;
     std::vector<ParameterValueVec> instanceParameters;
     std::vector<ParameterValueVec> functionParameters;
     std::vector<STObject> built_txns;

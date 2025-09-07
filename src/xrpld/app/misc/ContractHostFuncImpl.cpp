@@ -538,13 +538,13 @@ ContractHostFunctionsImpl::emitTxn(std::shared_ptr<STTx const> const& stxPtr)
     if (tpTrans->getStatus() != NEW)
         return Unexpected(HostFunctionError::SUBMIT_TXN_FAILURE);
 
-    if (contractCtx.openView.open())
+    if (contractCtx.applyCtx.openView().open())
         return tesSUCCESS;
 
     // NOTE: SmartContract Txn Ordering
-    std::cout << "Size: " << contractCtx.openView.itemsCount() << std::endl;
+    std::cout << "Size: " << contractCtx.applyCtx.openView().itemsCount() << std::endl;
 
-    OpenView wholeBatchView(batch_view, contractCtx.openView);
+    OpenView wholeBatchView(batch_view, contractCtx.applyCtx.openView());
     auto const parentTxId = parentTx.getTransactionID();
     auto applyOneTransaction = [&app, &j, &parentTxId, &wholeBatchView](
                                    std::shared_ptr<STTx const> const& tx) {
@@ -564,7 +564,7 @@ ContractHostFunctionsImpl::emitTxn(std::shared_ptr<STTx const> const& stxPtr)
     auto const result = applyOneTransaction(tpTrans->getSTransaction());
     std::cout << "Size.1: " << wholeBatchView.itemsCount() << std::endl;
     if (result.applied)
-        wholeBatchView.apply(contractCtx.openView);
+        wholeBatchView.apply(contractCtx.applyCtx.openView());
     return TERtoInt(result.ter);
 }
 

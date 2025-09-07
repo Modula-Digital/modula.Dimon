@@ -246,13 +246,11 @@ ContractCall::doApply()
 
     ripple::ContractDataMap dataMap;
     ripple::ContractEventMap eventMap;
-    OpenView wholeBatchView(batch_view, ctx_.openView());
     std::cout << "ctx_.view().size: " << ctx_.size() << std::endl;
     std::cout << "ctx_.openView().TxCount: " << ctx_.openView().txCount() << std::endl;
     std::cout << "ctx_.openView().ItemsCount: " << ctx_.openView().itemsCount() << std::endl;
-    std::cout << "wholeBatchView.TxCount: " << wholeBatchView.txCount() << std::endl;
-    std::cout << "wholeBatchView.ItemsCount: " << wholeBatchView.itemsCount() << std::endl;
-    ctx_.visit([&wholeBatchView](ripple::uint256 const& key, bool isDelete,
+    OpenView batch_view(ctx_.openView());
+    ctx_.visit([&batch_view](ripple::uint256 const& key, bool isDelete,
             std::shared_ptr<ripple::SLE const> const& before,
             std::shared_ptr<ripple::SLE const> const& after)
     {
@@ -269,19 +267,16 @@ ContractCall::doApply()
         {
             auto sle = std::const_pointer_cast<ripple::SLE>(after);
             if (before)
-                wholeBatchView.rawReplace(sle);
+                batch_view.rawReplace(sle);
             else
-                wholeBatchView.rawInsert(sle);
+                batch_view.rawInsert(sle);
         }
     });
     std::cout << "ctx_.view().size: " << ctx_.size() << std::endl;
     std::cout << "ctx_.openView().TxCount: " << ctx_.openView().txCount() << std::endl;
     std::cout << "ctx_.openView().ItemsCount: " << ctx_.openView().itemsCount() << std::endl;
-    std::cout << "wholeBatchView.TxCount: " << wholeBatchView.txCount() << std::endl;
-    std::cout << "wholeBatchView.ItemsCount: " << wholeBatchView.itemsCount() << std::endl;
     ContractContext contractCtx = {
         .applyCtx = ctx_,
-        .openView = wholeBatchView,
         .instanceParameters = instanceParameters,
         .functionParameters = functionParameters,
         .expected_etxn_count = 1,
@@ -320,9 +315,7 @@ ContractCall::doApply()
     }
 
     std::uint32_t allowance = ctx_.tx[sfComputationAllowance];
-    // ctx_.apply(tesSUCCESS);
     auto re = runEscrowWasm(wasm, funcName, {}, &ledgerDataProvider, allowance);
-    contractCtx.openView.apply(ctx_.openView());
     {
         JLOG(j_.error()) << "ContractCall.After: Account: " << account_ << " Balance: " << accountSle->getFieldAmount(sfBalance);
         JLOG(j_.error()) << "ContractCall.After: ContractAccount: " << contractAccount << " Balance: " << caSle->getFieldAmount(sfBalance);
