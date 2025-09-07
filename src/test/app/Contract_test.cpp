@@ -28,6 +28,55 @@ namespace test {
 
 class Contract_test : public beast::unit_test::suite
 {
+    struct TestLedgerData
+    {
+        int index;
+        std::string txType;
+        std::string result;
+    };
+
+    Json::Value
+    getLastLedger(jtx::Env& env)
+    {
+        Json::Value params;
+        params[jss::ledger_index] = env.closed()->seq();
+        params[jss::transactions] = true;
+        params[jss::expand] = true;
+        return env.rpc("json", "ledger", to_string(params));
+    }
+
+    Json::Value
+    getTxByIndex(Json::Value const& jrr, int const index)
+    {
+        for (auto const& txn : jrr[jss::result][jss::ledger][jss::transactions])
+        {
+            if (txn[jss::metaData][sfTransactionIndex.jsonName] == index)
+                return txn;
+        }
+        return {};
+    }
+
+    void
+    validateClosedLedger(
+        jtx::Env& env,
+        std::vector<TestLedgerData> const& ledgerResults)
+    {
+        auto const jrr = getLastLedger(env);
+        auto const transactions =
+            jrr[jss::result][jss::ledger][jss::transactions];
+        BEAST_EXPECT(transactions.size() == ledgerResults.size());
+        for (TestLedgerData const& ledgerResult : ledgerResults)
+        {
+            auto const txn = getTxByIndex(jrr, ledgerResult.index);
+            BEAST_EXPECT(txn.isMember(jss::metaData));
+            Json::Value const meta = txn[jss::metaData];
+            BEAST_EXPECT(
+                txn[sfTransactionType.jsonName] == ledgerResult.txType);
+            BEAST_EXPECT(
+                meta[sfTransactionResult.jsonName] == ledgerResult.result);
+        }
+    }
+
     static std::pair<uint256, std::shared_ptr<SLE const>>
     contractSourceKeyAndSle(ReadView const& view, uint256 const& contractHash)
     {
@@ -56,20 +105,10 @@ class Contract_test : public beast::unit_test::suite
         return {};
     }
 
-    Json::Value
-    getLastLedger(jtx::Env& env, int const& ledgerIndex = -1)
-    {
-        Json::Value params;
-        params[jss::ledger_index] = ledgerIndex == -1 ? env.closed()->seq() : ledgerIndex;
-        params[jss::transactions] = true;
-        params[jss::expand] = true;
-        return env.rpc("json", "ledger", to_string(params));
-    }
-
     std::string
-    getContractOwner(jtx::Env& env, int const& ledgerIndex = -1)
+    getContractOwner(jtx::Env& env)
     {
-        auto const jrr = getLastLedger(env, ledgerIndex);
+        auto const jrr = getLastLedger(env);
         auto const txn = getContractCreateTx(jrr);
         for (auto const& meta : txn[jss::metaData][sfAffectedNodes.fieldName])
         {
@@ -86,6 +125,34 @@ class Contract_test : public beast::unit_test::suite
         }
         return "";
     }
+
+    // jtx::Account
+    // getContractOwnerV2(jtx::Env& env)
+    // {
+    //     using namespace jtx;
+    //     auto const jrr = getLastLedger(env);
+    //     auto const txn = getContractCreateTx(jrr);
+    //     for (auto const& meta :
+    //     txn[jss::metaData][sfAffectedNodes.fieldName])
+    //     {
+    //         if (meta.isMember(sfCreatedNode.fieldName) &&
+    //             meta[sfCreatedNode.fieldName].isMember(
+    //                 sfLedgerEntryType.fieldName) &&
+    //             meta[sfCreatedNode.fieldName][sfLedgerEntryType.fieldName] ==
+    //                 jss::AccountRoot)
+    //         {
+    //             std::string const contractAccount =
+    //             meta[sfCreatedNode.fieldName][sfNewFields.fieldName]
+    //                        [sfAccount.fieldName]
+    //                            .asString();
+    //             auto const accountID =
+    //             parseBase58<AccountID>(contractAccount); Account const
+    //             contractAccount1{"Contract pseudo-account", *accountID};
+    //             return contractAccount1;
+    //         }
+    //     }
+    //     return {};
+    // }
 
     uint256
     getContractHash(Blob const& wasmBytes)
@@ -291,6 +358,36 @@ class Contract_test : public beast::unit_test::suite
         BEAST_EXPECT(sle->getFieldH256(sfContractHash) == contractHash);
         BEAST_EXPECT(sle->getFieldU64(sfReferenceCount) == referenceCount);
         validateFunctions(sle, functions);
+    }
+
+    template <typename... Args>
+    std::pair<jtx::Account, uint256>
+    submitContract(jtx::Env& env, TER const& result, Args&&... args)
+    {
+        auto txn = env.jt(std::forward<Args>(args)...);
+        env(txn, jtx::ter(result));
+        env.close();
+
+        // if (txn.jv.isMember(sfContractHash.jsonName))
+        // {
+        //     auto const accountID =
+        //     parseBase58<AccountID>(txn.jv[sfContractAccount].asString());
+        //     jtx::Account const contractAccount{
+        //         "Contract pseudo-account",
+        //         *accountID};
+        //     return std::make_pair(contractAccount,
+        //     uint256(txn.jv[sfContractHash]));
+        // }
+
+        auto const wasmBytes =
+            strUnHex(txn.jv[sfContractCode.jsonName].asString());
+        uint256 const contractHash = ripple::sha512Half_s(
+            ripple::Slice(wasmBytes->data(), wasmBytes->size()));
+        auto const [contractKey, sle] = contractKeyAndSle(
+            *env.current(), contractHash, txn.jv[sfSequence.jsonName].asUInt());
+        jtx::Account const contractAccount{
+            "Contract pseudo-account", sle->getAccountID(sfContractAccount)};
+        return std::make_pair(contractAccount, contractHash);
     }
 
     std::string const BaseContractWasm =
@@ -1014,8 +1111,6 @@ class Contract_test : public beast::unit_test::suite
             ter(tesSUCCESS));
         env.close();
 
-
-
         {
             Json::Value params;
             params[jss::ledger_index] = env.current()->seq() - 1;
@@ -1050,15 +1145,18 @@ class Contract_test : public beast::unit_test::suite
         env.fund(XRP(10'000), alice, bob);
         env.close();
 
-        std::string contractWasmStr = loadContractWasmStr("contract_data_advanced");
+        std::string contractWasmStr =
+            loadContractWasmStr("contract_data_advanced");
 
         env(contract::create(alice, contractWasmStr),
             contract::add_instance_param(
                 tfSendAmount, "value", "AMOUNT", XRP(2000)),
-            contract::add_function("test", {
-                {0, "account", "ACCOUNT"},
-                {0, "uint32", "UINT32"},
-            }),
+            contract::add_function(
+                "test",
+                {
+                    {0, "account", "ACCOUNT"},
+                    {0, "uint32", "UINT32"},
+                }),
             fee(XRP(200)),
             ter(tesSUCCESS));
         env.close();
@@ -1281,32 +1379,34 @@ class Contract_test : public beast::unit_test::suite
             contract::add_param(
                 0, "uint128", "UINT128", "00000000000000000000000000000001"),
             contract::add_param(
-                0, "uint160",
+                0,
+                "uint160",
                 "UINT160",
                 "0000000000000000000000000000000000000001"),
             contract::add_param(
-                0, "uint192",
+                0,
+                "uint192",
                 "UINT192",
                 "000000000000000000000000000000000000000000000001"),
             contract::add_param(
-                0, "uint256",
+                0,
+                "uint256",
                 "UINT256",
                 "D955DAC2E77519F05AD151A5D3C99FC8125FB39D58FF9F106F1ACA4491902C"
                 "25"),
             contract::add_param(0, "vl", "VL", "DEADBEEF"),
             contract::add_param(0, "account", "ACCOUNT", alice.human()),
             contract::add_param(
-                0, "amountXRP",
+                0,
+                "amountXRP",
                 "AMOUNT",
                 XRP(1).value().getJson(JsonOptions::none)),
             contract::add_param(
-                0, "amountIOU",
+                0,
+                "amountIOU",
                 "AMOUNT",
                 USD(1.2).value().getJson(JsonOptions::none)),
-            contract::add_param(
-                0, "number",
-                "NUMBER",
-                "1.2"),
+            contract::add_param(0, "number", "NUMBER", "1.2"),
             ter(tesSUCCESS));
         env.close();
 
@@ -1541,57 +1641,63 @@ class Contract_test : public beast::unit_test::suite
         using namespace jtx;
 
         test::jtx::Env env{*this, features};
+        std::uint32_t const gasPrice = env.current()->fees().gasPrice;
+        XRPAmount const feeDrops = env.current()->fees().base;
 
         auto const alice = Account{"alice"};
-        auto const bob = Account{"bob"};
-        env.fund(XRP(10'000), alice, bob);
+        env.fund(XRP(10'000), alice);
         env.close();
+
+        auto const preAlice = env.balance(alice);
 
         // Create Contract #1
-        env(contract::create(alice, loadContractWasmStr("submit_contract_call")),
+        auto const [contractAccount1, contractHash] = submitContract(
+            env,
+            tesSUCCESS,
+            contract::create(
+                alice, loadContractWasmStr("submit_contract_call")),
             contract::add_instance_param(
                 tfSendAmount, "value", "AMOUNT", XRP(2000)),
-            contract::add_function("emit", {
-                {tfSendAmount, "value", "AMOUNT"},
-                {0, "account", "ACCOUNT"},
-                {0, "uint32", "UINT32"}
-            }),
-            fee(XRP(200)),
-            ter(tesSUCCESS));
-        env.close();
-        auto const contractAccount1 = getContractOwner(env);
+            contract::add_function(
+                "emit",
+                {{tfSendAmount, "value", "AMOUNT"},
+                 {0, "account", "ACCOUNT"},
+                 {0, "uint32", "UINT32"}}),
+            fee(XRP(200)));
 
         // Create Contract #2
-        env(contract::create(alice, loadContractWasmStr("submit")),
+        auto const [contractAccount2, contractHash2] = submitContract(
+            env,
+            tesSUCCESS,
+            contract::create(alice, loadContractWasmStr("submit")),
             contract::add_instance_param(
                 tfSendAmount, "value", "AMOUNT", XRP(2000)),
-            contract::add_function("test", {
-                {0, "account", "ACCOUNT"},
-                {0, "uint32", "UINT32"}
-            }),
-            fee(XRP(200)),
-            ter(tesSUCCESS));
-        env.close();
-        auto const contractAccount2 = getContractOwner(env);
-        
-        std::cout << "Contract Account 1: " << contractAccount1 << std::endl;
-        std::cout << "Contract Account 2: " << contractAccount2 << std::endl;
-        env(contract::call(alice, contractAccount1, "emit"),
-            contract::add_param(tfSendAmount, "value", "AMOUNT", 1000000),
-            contract::add_param(0, "account", "ACCOUNT", contractAccount2),
+            contract::add_function(
+                "test", {{0, "account", "ACCOUNT"}, {0, "uint32", "UINT32"}}),
+            fee(XRP(200)));
+
+        env(contract::call(alice, contractAccount1.human(), "emit"),
+            contract::add_param(tfSendAmount, "value", "AMOUNT", XRP(1)),
+            contract::add_param(
+                0, "account", "ACCOUNT", contractAccount2.human()),
             contract::add_param(0, "uint32", "UINT32", 100),
-            escrow::comp_allowance(1000000),
+            escrow::comp_allowance(1'000'000),
             ter(tesSUCCESS));
         env.close();
 
-        {
-            Json::Value params;
-            params[jss::ledger_index] = env.current()->seq() - 1;
-            params[jss::transactions] = true;
-            params[jss::expand] = true;
-            auto const jrr = env.rpc("json", "ledger", to_string(params));
-            std::cout << jrr << std::endl;
-        }
+        std::vector<TestLedgerData> testCases = {
+            {0, "ContractCall", "tesSUCCESS"},
+            {1, "ContractCall", "tesSUCCESS"},
+            {2, "Payment", "tesSUCCESS"},
+        };
+        validateClosedLedger(env, testCases);
+        auto const callFee = 1000000 * gasPrice / 1'000'000;
+        BEAST_EXPECT(
+            env.balance(alice) ==
+            preAlice - XRP(200) - XRP(200) - XRP(2000) - XRP(2000) - XRP(1) -
+                XRP(callFee) - feeDrops + drops(192));
+        BEAST_EXPECT(env.balance(contractAccount1) == XRP(2000) + XRP(1));
+        BEAST_EXPECT(env.balance(contractAccount2) == XRP(2000) - drops(192));
     }
 
     void

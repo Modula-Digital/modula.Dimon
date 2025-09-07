@@ -121,7 +121,9 @@ ContractCall::preclaim(PreclaimContext const& ctx)
 
     if (it == functions.end())
     {
-        JLOG(ctx.j.error()) << "ContractCall: FunctionName: " <<  functionNameHexStr << " does not exist in contract.";
+        JLOG(ctx.j.error())
+            << "ContractCall: FunctionName: " << functionNameHexStr
+            << " does not exist in contract.";
         return temMALFORMED;
     }
 
@@ -204,7 +206,8 @@ ContractCall::doApply()
     }
     if (!function)
     {
-        JLOG(j_.error()) << "ContractCall: FunctionName does not exist in contract.";
+        JLOG(j_.error())
+            << "ContractCall: FunctionName does not exist in contract.";
         return tefINTERNAL;
     }
 
@@ -225,8 +228,7 @@ ContractCall::doApply()
         instanceParameters = getParameterValueVec(instParams);
     }
 
-    // NOTE: This does not handle optional parameters. Any parameters listed in
-    // the ContractSource are required in the ContractCall.
+    // The parameters don't match the function's ABI.
     std::vector<ParameterTypeVec> typeVec;
     if (function->isFieldPresent(sfParameters))
     {

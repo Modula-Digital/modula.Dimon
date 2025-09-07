@@ -24,8 +24,8 @@
 
 #include <xrpl/protocol/STData.h>
 #include <xrpl/protocol/STNumber.h>
-#include <xrpl/protocol/STTx.h>
 #include <xrpl/protocol/STParsedJSON.h>
+#include <xrpl/protocol/STTx.h>
 
 namespace ripple {
 
@@ -35,31 +35,23 @@ getFieldDataFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
     switch (stTypeId)
     {
         case STI_UINT8: {
-            // if (write_len != 0 && write_len != 1)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT8)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint8_t data = funcParam.getFieldU8();
             return Bytes{data};
         }
         case STI_UINT16: {
-            // if (write_len != 0 && write_len != 2)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT16)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint16_t data = funcParam.getFieldU16();
-            // Serialize as two bytes in little-endian order
             return Bytes{
                 static_cast<unsigned char>(data & 0xFF),
                 static_cast<unsigned char>((data >> 8) & 0xFF)};
         }
         case STI_UINT32: {
-            // if (write_len != 0 && write_len != 4)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT32)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint32_t data = funcParam.getFieldU32();
-            // Serialize as four bytes in little-endian order
             return Bytes{
                 static_cast<unsigned char>(data & 0xFF),
                 static_cast<unsigned char>((data >> 8) & 0xFF),
@@ -67,12 +59,9 @@ getFieldDataFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
                 static_cast<unsigned char>((data >> 24) & 0xFF)};
         }
         case STI_UINT64: {
-            // if (write_len != 0 && write_len != 8)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT64)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint64_t data = funcParam.getFieldU64();
-            // Serialize as eight bytes in little-endian order
             return Bytes{
                 static_cast<unsigned char>(data & 0xFF),
                 static_cast<unsigned char>((data >> 8) & 0xFF),
@@ -84,36 +73,26 @@ getFieldDataFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
                 static_cast<unsigned char>((data >> 56) & 0xFF)};
         }
         case STI_UINT128: {
-            // if (write_len != 16)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT128)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint128 data = funcParam.getFieldH128();
-            // Convert uint128 to bytes (assuming uint128 is an array of 16
-            // bytes or similar)
             return Bytes{
                 reinterpret_cast<uint8_t const*>(&data),
                 reinterpret_cast<uint8_t const*>(&data) + sizeof(uint128)};
         }
         case STI_UINT160: {
-            // if (write_len != 20)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT160)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint160 data = funcParam.getFieldH160();
             return Bytes{data.begin(), data.end()};
         }
         case STI_UINT192: {
-            // if (write_len != 24)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT192)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint192 data = funcParam.getFieldH192();
             return Bytes{data.begin(), data.end()};
         }
         case STI_UINT256: {
-            // if (write_len != 32)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_UINT256)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             uint256 data = funcParam.getFieldH256();
@@ -126,32 +105,18 @@ getFieldDataFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
             return Bytes{data.begin(), data.end()};
         }
         case STI_ACCOUNT: {
-            // if (write_len != 20)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_ACCOUNT)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             AccountID data = funcParam.getAccountID();
             return Bytes{data.data(), data.data() + data.size()};
         }
         case STI_AMOUNT: {
-            // if (write_len != 8 && write_len != 48)
-            //     return INVALID_ARGUMENT;
             if (funcParam.getInnerSType() != STI_AMOUNT)
                 return Unexpected(HostFunctionError::INVALID_PARAMS);
             STAmount data = funcParam.getFieldAmount();
             Serializer s;
             data.add(s);
             auto const& serialized = s.getData();
-            // if (data.native())
-            // {
-            //     // if (write_len != 8)
-            //     //     return Unexpected(HostFunctionError::INVALID_PARAMS);
-            // }
-            // else
-            // {
-            //     // if (write_len != 48)
-            //     //     return Unexpected(HostFunctionError::INVALID_PARAMS);
-            // }
             return Bytes{serialized.begin(), serialized.end()};
         }
         case STI_NUMBER: {
@@ -163,6 +128,30 @@ getFieldDataFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
             auto const& serialized = s.getData();
             return Bytes{serialized.begin(), serialized.end()};
         }
+        case STI_ISSUE: {
+            if (funcParam.getInnerSType() != STI_ISSUE)
+                return Unexpected(HostFunctionError::INVALID_PARAMS);
+            STIssue data = funcParam.getFieldIssue();
+            Serializer s;
+            data.add(s);
+            auto const& serialized = s.getData();
+            return Bytes{serialized.begin(), serialized.end()};
+        }
+        case STI_CURRENCY: {
+            if (funcParam.getInnerSType() != STI_CURRENCY)
+                return Unexpected(HostFunctionError::INVALID_PARAMS);
+            STCurrency data = funcParam.getFieldCurrency();
+            Serializer s;
+            data.add(s);
+            auto const& serialized = s.getData();
+            return Bytes{serialized.begin(), serialized.end()};
+        }
+        case STI_PATHSET:
+        case STI_VECTOR256:
+        case STI_XCHAIN_BRIDGE:
+        case STI_DATA:
+        case STI_DATATYPE:
+        case STI_JSON:
         default:
             return Unexpected(HostFunctionError::INVALID_PARAMS);
     }
@@ -200,7 +189,6 @@ ContractHostFunctionsImpl::functionParam(
 inline std::optional<std::reference_wrapper<std::pair<bool, STJson> const>>
 getDataCache(ContractContext& contractCtx, ripple::AccountID const& account)
 {
-    // std::cout << "getDataCache: " << to_string(account) << std::endl;
     auto& dataMap = contractCtx.result.dataMap;
     if (dataMap.find(account) == dataMap.end())
         return std::nullopt;
@@ -216,7 +204,6 @@ setDataCache(
     STJson const& data,
     bool modified = true)
 {
-    // std::cout << "setDataCache: " << to_string(account) << data.getJson(JsonOptions::none).toStyledString() << std::endl;
     auto& dataMap = contractCtx.result.dataMap;
     auto& view = contractCtx.applyCtx.view();
 
@@ -247,7 +234,6 @@ setDataCache(
 
         dataMap.modifiedCount++;
         dataMap[account] = {modified, data};
-        // contractCtx.applyCtx.openView().setDataCache(account, data, modified);
         return HostFunctionError::SUCCESS;
     }
 
@@ -263,7 +249,6 @@ setDataCache(
     }
 
     dataMap[account] = {modified, data};
-    // contractCtx.applyCtx.openView().setDataCache(account, data, modified);
     return HostFunctionError::SUCCESS;
 }
 
@@ -418,11 +403,9 @@ ContractHostFunctionsImpl::setContractData(
 STJson
 getContractDataOrCache(ContractContext& contractCtx, AccountID const& account)
 {
-    // std::cout << "getContractDataOrCache: " << to_string(account) << std::endl;
     auto cacheEntryLookup = getDataCache(contractCtx, account);
     if (!cacheEntryLookup)
     {
-        // std::cout << "getContractDataOrCache.noCache: " << to_string(account) << std::endl;
         AccountID const& contractAccount = contractCtx.result.contractAccount;
         auto const dataKeylet = keylet::contractData(account, contractAccount);
         auto& view = contractCtx.applyCtx.view();
@@ -430,19 +413,16 @@ getContractDataOrCache(ContractContext& contractCtx, AccountID const& account)
         if (dataSle)
         {
             // Return the STJson from the SLE
-            // std::cout << "getContractDataOrCache.data: " << to_string(account) << std::endl;
             return dataSle->getFieldJson(sfContractJson);
         }
 
         // Return New STJson if not found
-        // std::cout << "getContractDataOrCache.noData: " << to_string(account) << std::endl;
         STJson data;
         return data;
     }
 
     // Return the cached STJson
     auto const& cacheEntry = cacheEntryLookup->get();
-    // std::cout << "getContractDataOrCache.cache: " << to_string(account) << std::endl;
     return cacheEntry.second;
 }
 
@@ -477,7 +457,6 @@ ContractHostFunctionsImpl::setNestedContractDataFromKey(
     return Unexpected(HostFunctionError::INTERNAL);
 }
 
-
 Expected<int32_t, HostFunctionError>
 ContractHostFunctionsImpl::buildTxn(std::uint16_t const& txType)
 {
@@ -497,15 +476,20 @@ ContractHostFunctionsImpl::buildTxn(std::uint16_t const& txType)
 }
 
 Expected<int32_t, HostFunctionError>
-ContractHostFunctionsImpl::addTxnField(std::uint32_t const& index, SField const& field, Slice const& data)
+ContractHostFunctionsImpl::addTxnField(
+    std::uint32_t const& index,
+    SField const& field,
+    Slice const& data)
 {
     // Get the transaction JSON
     auto& obj = contractCtx.built_txns[index];
     // std::cout << "Building Txn: " << obj << std::endl;
-    std::cout << "Adding field: " << field.getName() << " with data size: " << data.size() << std::endl;
+    std::cout << "Adding field: " << field.getName()
+              << " with data size: " << data.size() << std::endl;
 
     // Get the transaction type format
-    auto txFormat = TxFormats::getInstance().findByType(safe_cast<TxType>(std::uint16_t{0}));
+    auto txFormat = TxFormats::getInstance().findByType(
+        safe_cast<TxType>(std::uint16_t{0}));
     if (!txFormat)
         return Unexpected(HostFunctionError::FIELD_NOT_FOUND);
 
@@ -542,9 +526,10 @@ ContractHostFunctionsImpl::emitTxn(std::shared_ptr<STTx const> const& stxPtr)
     auto const parentTxId = parentTx.getTransactionID();
     auto applyOneTransaction = [&app, &j, &parentTxId, &wholeBatchView](
                                    std::shared_ptr<STTx const> const& tx) {
-        auto const pfresult = preflight(app, wholeBatchView.rules(), parentTxId, *tx, tapGENERATED, j);
+        auto const pfresult = preflight(
+            app, wholeBatchView.rules(), parentTxId, *tx, tapGENERATED, j);
         auto const ret = preclaim(pfresult, app, wholeBatchView);
-        JLOG(j.error()) << "WASM [" << parentTxId
+        JLOG(j.trace()) << "WASM [" << parentTxId
                         << "]: " << tx->getTransactionID() << " "
                         << transToken(ret.ter);
         return ret;

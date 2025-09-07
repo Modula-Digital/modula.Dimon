@@ -544,6 +544,32 @@ Transactor::ticketDelete(
     return tesSUCCESS;
 }
 
+std::pair<TER, XRPAmount>
+Transactor::checkInvariants(TER result, XRPAmount fee)
+{
+    // Check invariants: if `tecINVARIANT_FAILED` is not returned, we can
+    // proceed to apply the tx
+    result = ctx_.checkInvariants(result, fee);
+
+    if (result == tecINVARIANT_FAILED)
+    {
+        // if invariants checking failed again, reset the context and
+        // attempt to only claim a fee.
+        auto const resetResult = reset(fee);
+        if (!isTesSuccess(resetResult.first))
+            result = resetResult.first;
+
+        fee = resetResult.second;
+
+        // Check invariants again to ensure the fee claiming doesn't
+        // violate invariants.
+        if (isTesSuccess(result) || isTecClaim(result))
+            result = ctx_.checkInvariants(result, fee);
+    }
+
+    return {result, fee};
+}
+
 // check stuff before you bother to lock the ledger
 void
 Transactor::preCompute()
@@ -1283,26 +1309,9 @@ Transactor::operator()()
 
     if (applied)
     {
-        // Check invariants: if `tecINVARIANT_FAILED` is not returned, we can
-        // proceed to apply the tx
-        result = ctx_.checkInvariants(result, fee);
-
-        if (result == tecINVARIANT_FAILED)
-        {
-            // if invariants checking failed again, reset the context and
-            // attempt to only claim a fee.
-            auto const resetResult = reset(fee);
-            if (!isTesSuccess(resetResult.first))
-                result = resetResult.first;
-
-            fee = resetResult.second;
-
-            // Check invariants again to ensure the fee claiming doesn't
-            // violate invariants.
-            if (isTesSuccess(result) || isTecClaim(result))
-                result = ctx_.checkInvariants(result, fee);
-        }
-
+        auto const invariantsResult = checkInvariants(result, fee);
+        result = invariantsResult.first;
+        fee = invariantsResult.second;
         // We ran through the invariant checker, which can, in some cases,
         // return a tef error code. Don't apply the transaction in that case.
         if (!isTecClaim(result) && !isTesSuccess(result))
@@ -1390,7 +1399,10 @@ Transactor::operator()()
                 result = resetResult.first;
             fee = resetResult.second;
 
-            // TODO: InvariantCheck
+            // InvariantCheck
+            auto const invariantsResult = checkInvariants(result, fee);
+            result = invariantsResult.first;
+            fee = invariantsResult.second;
             
             // apply
             metadata = ctx_.apply(result);
