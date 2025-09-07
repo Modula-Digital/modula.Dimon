@@ -23,6 +23,7 @@
 #include <xrpld/app/tx/apply.h>
 #include <xrpld/app/tx/detail/ContractCall.h>
 #include <xrpld/ledger/View.h>
+#include <xrpld/ledger/detail/ApplyViewBase.h>
 
 #include <xrpl/basics/Log.h>
 #include <xrpl/protocol/Feature.h>
@@ -132,14 +133,18 @@ TER
 ContractCall::doApply()
 {
     AccountID const contractAccount = ctx_.tx[sfContractAccount];
-    auto const caSle = ctx_.view().read(keylet::account(contractAccount));
+    std::cout << "ContractAccount.index: " << keylet::account(contractAccount).key << std::endl;
+
+    // Use Peek because handleFlagParameters will update the SLE.
+    auto const caSle = ctx_.view().peek(keylet::account(contractAccount));
     if (!caSle)
     {
         JLOG(j_.error()) << "ContractCall: ContractAccount does not exist.";
         return tefINTERNAL;
     }
 
-    auto const accountSle = ctx_.view().read(keylet::account(account_));
+    // Use Peek because handleFlagParameters will update the SLE.
+    auto const accountSle = ctx_.view().peek(keylet::account(account_));
     if (!accountSle)
     {
         JLOG(j_.error()) << "ContractCall: Account does not exist.";
@@ -162,6 +167,25 @@ ContractCall::doApply()
     {
         JLOG(j_.error()) << "ContractCall: ContractSource does not exist.";
         return tefINTERNAL;
+    }
+
+    // // Handle the flags for the contract call.
+    if (ctx_.tx.isFieldPresent(sfParameters))
+    {
+        STArray const& params = ctx_.tx.getFieldArray(sfParameters);
+        if (auto ter = contract::handleFlagParameters(
+                ctx_.view(),
+                ctx_.tx,
+                account_,
+                contractAccount,
+                params,
+                ctx_.journal);
+            !isTesSuccess(ter))
+        {
+            JLOG(ctx_.journal.error())
+                << "ContractCall: Failed to handle flag parameters.";
+            return ter;
+        }
     }
 
     // WASM execution
@@ -222,8 +246,42 @@ ContractCall::doApply()
 
     ripple::ContractDataMap dataMap;
     ripple::ContractEventMap eventMap;
+    OpenView wholeBatchView(batch_view, ctx_.openView());
+    std::cout << "ctx_.view().size: " << ctx_.size() << std::endl;
+    std::cout << "ctx_.openView().TxCount: " << ctx_.openView().txCount() << std::endl;
+    std::cout << "ctx_.openView().ItemsCount: " << ctx_.openView().itemsCount() << std::endl;
+    std::cout << "wholeBatchView.TxCount: " << wholeBatchView.txCount() << std::endl;
+    std::cout << "wholeBatchView.ItemsCount: " << wholeBatchView.itemsCount() << std::endl;
+    ctx_.visit([&wholeBatchView](ripple::uint256 const& key, bool isDelete,
+            std::shared_ptr<ripple::SLE const> const& before,
+            std::shared_ptr<ripple::SLE const> const& after)
+    {
+        // if (isDelete)
+        // {
+        //     if (before)
+        //     {
+        //         auto sle = ctx_.view().peek(key);
+        //         if (sle)
+        //             wholeBatchView.rawErase(sle);
+        //     }
+        // }
+        if (after)
+        {
+            auto sle = std::const_pointer_cast<ripple::SLE>(after);
+            if (before)
+                wholeBatchView.rawReplace(sle);
+            else
+                wholeBatchView.rawInsert(sle);
+        }
+    });
+    std::cout << "ctx_.view().size: " << ctx_.size() << std::endl;
+    std::cout << "ctx_.openView().TxCount: " << ctx_.openView().txCount() << std::endl;
+    std::cout << "ctx_.openView().ItemsCount: " << ctx_.openView().itemsCount() << std::endl;
+    std::cout << "wholeBatchView.TxCount: " << wholeBatchView.txCount() << std::endl;
+    std::cout << "wholeBatchView.ItemsCount: " << wholeBatchView.itemsCount() << std::endl;
     ContractContext contractCtx = {
         .applyCtx = ctx_,
+        .openView = wholeBatchView,
         .instanceParameters = instanceParameters,
         .functionParameters = functionParameters,
         .expected_etxn_count = 1,
@@ -253,12 +311,28 @@ ContractCall::doApply()
         JLOG(j_.error()) << "ContractCall: Computation allowance is not set.";
         return tefINTERNAL;
     }
+
+    {
+        JLOG(j_.error()) << "ContractCall.Before: Account: " << account_ << " Balance: " << accountSle->getFieldAmount(sfBalance);
+        JLOG(j_.error()) << "ContractCall.Before: ContractAccount: " << contractAccount << " Balance: " << caSle->getFieldAmount(sfBalance);
+        JLOG(j_.error()) << "ContractCall.Before: Account: " << account_ << " Sequence: " << accountSle->getFieldU32(sfSequence);
+        JLOG(j_.error()) << "ContractCall.Before: ContractAccount: " << contractAccount << " Sequence: " << caSle->getFieldU32(sfSequence);
+    }
+
     std::uint32_t allowance = ctx_.tx[sfComputationAllowance];
+    // ctx_.apply(tesSUCCESS);
     auto re = runEscrowWasm(wasm, funcName, {}, &ledgerDataProvider, allowance);
+    contractCtx.openView.apply(ctx_.openView());
+    {
+        JLOG(j_.error()) << "ContractCall.After: Account: " << account_ << " Balance: " << accountSle->getFieldAmount(sfBalance);
+        JLOG(j_.error()) << "ContractCall.After: ContractAccount: " << contractAccount << " Balance: " << caSle->getFieldAmount(sfBalance);
+        JLOG(j_.error()) << "ContractCall.After: Account: " << account_ << " Sequence: " << accountSle->getFieldU32(sfSequence);
+        JLOG(j_.error()) << "ContractCall.After: ContractAccount: " << contractAccount << " Sequence: " << caSle->getFieldU32(sfSequence);
+    }
 
     // Create MetaData
     ApplyViewImpl& avi =
-        dynamic_cast<ApplyViewImpl&>(contractCtx.applyCtx.view());
+        dynamic_cast<ApplyViewImpl&>(ctx_.view());
     STObject meta{sfContractExecution};
     meta.setAccountID(sfContractAccount, contractAccount);
     meta.setFieldH256(sfContractHash, contractHash);
@@ -279,10 +353,9 @@ ContractCall::doApply()
         }
 
         if (auto res = contract::finalizeContractData(
-                contractCtx.applyCtx,
+                ctx_,
                 contractAccount,
                 contractCtx.result.dataMap,
-                contractCtx.result.eventMap,
                 ctx_.tx.getTransactionID());
             !isTesSuccess(res))
         {
@@ -290,6 +363,9 @@ ContractCall::doApply()
                 << "Contract data finalization failed: " << transHuman(res);
             return res;
         }
+
+        // for (auto const& [name, data] : contractCtx.result.eventMap)
+        //     contractCtx.applyCtx.app.getOPs().pubContractEvent(name, data);
 
         meta.setFieldU64(sfContractReturnCode, 0);
         meta.setFieldU8(sfContractResult, ripple::ExitType::ACCEPT);

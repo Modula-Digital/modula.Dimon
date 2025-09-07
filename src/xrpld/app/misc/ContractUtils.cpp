@@ -330,12 +330,10 @@ handleFlagParameters(
     STTx const& tx,
     AccountID const& sourceAccount,
     AccountID const& contractAccount,
+    STArray const& parameters,
     beast::Journal j)
 {
-    if (!tx.isFieldPresent(sfInstanceParameterValues))
-        return tesSUCCESS;
-
-    for (auto const& param : tx.getFieldArray(sfInstanceParameterValues))
+    for (auto const& param : parameters)
     {
         if (!param.isFieldPresent(sfParameterFlag) ||
             !isValidParameterFlag(param.getFieldU32(sfParameterFlag)))
@@ -359,7 +357,7 @@ handleFlagParameters(
                     !isTesSuccess(ter))
                 {
                     JLOG(j.error())
-                        << "ContractCreate/Modify: Failed to send amount: "
+                        << "handleFlagParameters: Failed to send amount: "
                         << amount;
                     return ter;
                 }
@@ -375,7 +373,7 @@ handleFlagParameters(
                     !isTesSuccess(ter))
                 {
                     JLOG(j.error())
-                        << "ContractCreate/Modify: Failed to send NFT token: "
+                        << "handleFlagParameters: Failed to send NFT token: "
                         << nftokenID;
                     return ter;
                 }
@@ -503,14 +501,10 @@ finalizeContractData(
     ApplyContext& applyCtx,
     AccountID const& contractAccount,
     ContractDataMap const& dataMap,
-    ContractEventMap const& eventMap,
     uint256 const& txnID)
 {
     auto const& j = applyCtx.app.journal("View");
     uint16_t changeCount = 0;
-
-    for (auto const& [name, data] : eventMap)
-        applyCtx.app.getOPs().pubContractEvent(name, data);
 
     for (auto const& accEntry : dataMap)
     {

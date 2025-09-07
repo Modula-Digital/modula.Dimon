@@ -98,6 +98,12 @@ public:
     std::unique_ptr<ReadView::sles_type::iter_base>
     slesUpperBound(ReadView const& base, uint256 const& key) const;
 
+    std::size_t
+    itemsCount() const
+    {
+        return items_.size();
+    }
+
 private:
     enum class Action {
         erase,

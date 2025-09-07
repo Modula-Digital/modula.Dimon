@@ -84,6 +84,7 @@ handleFlagParameters(
     STTx const& tx,
     AccountID const& sourceAccount,
     AccountID const& contractAccount,
+    STArray const& parameters,
     beast::Journal j);
 
 TER
@@ -91,7 +92,6 @@ finalizeContractData(
     ApplyContext& applyCtx,
     AccountID const& contractAccount,
     ContractDataMap const& dataMap,
-    ContractEventMap const& eventMap,
     uint256 const& txnID);
 
 }  // namespace contract

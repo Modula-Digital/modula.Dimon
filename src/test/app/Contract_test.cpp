@@ -1074,8 +1074,8 @@ class Contract_test : public beast::unit_test::suite
 
         auto const contractAccount = getContractOwner(env);
         env(contract::call(alice, contractAccount, "test"),
-            contract::add_param("account", "ACCOUNT", alice.human()),
-            contract::add_param("uint32", "UINT32", 5),
+            contract::add_param(0, "account", "ACCOUNT", alice.human()),
+            contract::add_param(0, "uint32", "UINT32", 5),
             escrow::comp_allowance(1'000'000),
             ter(tesSUCCESS));
         env.close();
@@ -1273,38 +1273,38 @@ class Contract_test : public beast::unit_test::suite
         auto const contractAccount = getContractOwner(env);
         env(contract::call(alice, contractAccount, "call"),
             escrow::comp_allowance(1000000),
-            contract::add_param("uint8", "UINT8", 255),
-            contract::add_param("uint16", "UINT16", 65535),
+            contract::add_param(0, "uint8", "UINT8", 255),
+            contract::add_param(0, "uint16", "UINT16", 65535),
             contract::add_param(
-                "uint32", "UINT32", static_cast<std::uint32_t>(4294967295)),
-            contract::add_param("uint64", "UINT64", "9223372036854775807"),
+                0, "uint32", "UINT32", static_cast<std::uint32_t>(4294967295)),
+            contract::add_param(0, "uint64", "UINT64", "9223372036854775807"),
             contract::add_param(
-                "uint128", "UINT128", "00000000000000000000000000000001"),
+                0, "uint128", "UINT128", "00000000000000000000000000000001"),
             contract::add_param(
-                "uint160",
+                0, "uint160",
                 "UINT160",
                 "0000000000000000000000000000000000000001"),
             contract::add_param(
-                "uint192",
+                0, "uint192",
                 "UINT192",
                 "000000000000000000000000000000000000000000000001"),
             contract::add_param(
-                "uint256",
+                0, "uint256",
                 "UINT256",
                 "D955DAC2E77519F05AD151A5D3C99FC8125FB39D58FF9F106F1ACA4491902C"
                 "25"),
-            contract::add_param("vl", "VL", "DEADBEEF"),
-            contract::add_param("account", "ACCOUNT", alice.human()),
+            contract::add_param(0, "vl", "VL", "DEADBEEF"),
+            contract::add_param(0, "account", "ACCOUNT", alice.human()),
             contract::add_param(
-                "amountXRP",
+                0, "amountXRP",
                 "AMOUNT",
                 XRP(1).value().getJson(JsonOptions::none)),
             contract::add_param(
-                "amountIOU",
+                0, "amountIOU",
                 "AMOUNT",
                 USD(1.2).value().getJson(JsonOptions::none)),
             contract::add_param(
-                "number",
+                0, "number",
                 "NUMBER",
                 "1.2"),
             ter(tesSUCCESS));
@@ -1552,7 +1552,9 @@ class Contract_test : public beast::unit_test::suite
             contract::add_instance_param(
                 tfSendAmount, "value", "AMOUNT", XRP(2000)),
             contract::add_function("emit", {
-                {0, "account", "ACCOUNT"}
+                {tfSendAmount, "value", "AMOUNT"},
+                {0, "account", "ACCOUNT"},
+                {0, "uint32", "UINT32"}
             }),
             fee(XRP(200)),
             ter(tesSUCCESS));
@@ -1560,7 +1562,7 @@ class Contract_test : public beast::unit_test::suite
         auto const contractAccount1 = getContractOwner(env);
 
         // Create Contract #2
-        env(contract::create(alice, loadContractWasmStr("contract_data_advanced")),
+        env(contract::create(alice, loadContractWasmStr("submit")),
             contract::add_instance_param(
                 tfSendAmount, "value", "AMOUNT", XRP(2000)),
             contract::add_function("test", {
@@ -1575,7 +1577,9 @@ class Contract_test : public beast::unit_test::suite
         std::cout << "Contract Account 1: " << contractAccount1 << std::endl;
         std::cout << "Contract Account 2: " << contractAccount2 << std::endl;
         env(contract::call(alice, contractAccount1, "emit"),
-            contract::add_param("account", "ACCOUNT", contractAccount2),
+            contract::add_param(tfSendAmount, "value", "AMOUNT", 1000000),
+            contract::add_param(0, "account", "ACCOUNT", contractAccount2),
+            contract::add_param(0, "uint32", "UINT32", 100),
             escrow::comp_allowance(1000000),
             ter(tesSUCCESS));
         env.close();
@@ -1810,9 +1814,9 @@ class Contract_test : public beast::unit_test::suite
         // testContractData(features);
         // testContractDataV2(features);
         // testContractDataAdvanced(features);
-        testParameters(features);
+        // testParameters(features);
         // testSubmit(features);
-        // testSubmitContractCall(features);
+        testSubmitContractCall(features);
         // testEvents(features);
     }
 

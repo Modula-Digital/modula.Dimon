@@ -155,16 +155,18 @@ template <typename T>
 class add_param
 {
 private:
+    std::uint32_t flags_;
     std::string name_;
     std::string type_;
     T value_;
 
 public:
     explicit add_param(
+        std::uint32_t flags,
         std::string const& name,
         std::string const& type,
         T value)
-        : name_(name), type_(type), value_(value)
+        : flags_(flags), name_(name), type_(type), value_(value)
     {
     }
 
@@ -173,6 +175,7 @@ public:
     {
         Json::Value param = Json::Value(Json::objectValue);
         param[sfParameter] = Json::Value(Json::objectValue);
+        param[sfParameter][sfParameterFlag] = flags_;
         param[sfParameter][sfParameterValue] = Json::Value(Json::objectValue);
         param[sfParameter][sfParameterValue][jss::name] = strHex(name_);
         param[sfParameter][sfParameterValue][jss::type] = type_;

@@ -69,6 +69,7 @@ struct ContractHostFuncImpl_test : public beast::unit_test::suite
         auto const k = keylet::contract(contractHash, 0);
         ContractContext contractCtx = {
             .applyCtx = ac,
+            .openView = ov,
             .instanceParameters = instanceParameters,
             .functionParameters = functionParameters,
             .expected_etxn_count = 0,

@@ -703,7 +703,7 @@ WasmHostFunctionsImpl::trace(
     bool asHex)
 {
 #ifdef DEBUG_OUTPUT
-    auto j = getJournal().error();
+    auto j = getJournal().trace();
 #else
     auto j = getJournal().trace();
 #endif
@@ -729,7 +729,7 @@ Expected<int32_t, HostFunctionError>
 WasmHostFunctionsImpl::traceNum(std::string_view const& msg, int64_t data)
 {
 #ifdef DEBUG_OUTPUT
-    auto j = getJournal().error();
+    auto j = getJournal().trace();
 #else
     auto j = getJournal().trace();
 #endif
@@ -743,7 +743,7 @@ WasmHostFunctionsImpl::traceFloat(
     Slice const& data)
 {
 #ifdef DEBUG_OUTPUT
-    auto j = getJournal().error();
+    auto j = getJournal().trace();
 #else
     auto j = getJournal().trace();
 #endif

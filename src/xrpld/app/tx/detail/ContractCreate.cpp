@@ -258,14 +258,18 @@ ContractCreate::doApply()
 
     ctx_.view().insert(contractSle);
 
-    // Handle the flags for the contract creation.
-    if (auto ter = contract::handleFlagParameters(
-            ctx_.view(), ctx_.tx, account_, pseudoAccount, ctx_.journal);
-        !isTesSuccess(ter))
+    // Handle the instance parameters for the contract creation.
+    if (ctx_.tx.isFieldPresent(sfInstanceParameterValues))
     {
-        JLOG(ctx_.journal.error())
-            << "ContractCreate: Failed to handle flag parameters.";
-        return ter;
+        STArray const& params = ctx_.tx.getFieldArray(sfInstanceParameterValues);
+        if (auto ter = contract::handleFlagParameters(
+                ctx_.view(), ctx_.tx, account_, pseudoAccount, params, ctx_.journal);
+            !isTesSuccess(ter))
+        {
+            JLOG(ctx_.journal.error())
+                << "ContractCreate: Failed to handle flag parameters.";
+            return ter;
+        }
     }
 
     // Check Reserve Requirements

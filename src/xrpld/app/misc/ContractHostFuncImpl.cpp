@@ -18,6 +18,7 @@
 //==============================================================================
 
 #include <xrpld/app/misc/ContractHostFuncImpl.h>
+#include <xrpld/app/misc/ContractUtils.h>
 #include <xrpld/app/misc/Transaction.h>
 #include <xrpld/app/tx/apply.h>
 
@@ -199,6 +200,7 @@ ContractHostFunctionsImpl::functionParam(
 inline std::optional<std::reference_wrapper<std::pair<bool, STJson> const>>
 getDataCache(ContractContext& contractCtx, ripple::AccountID const& account)
 {
+    // std::cout << "getDataCache: " << to_string(account) << std::endl;
     auto& dataMap = contractCtx.result.dataMap;
     if (dataMap.find(account) == dataMap.end())
         return std::nullopt;
@@ -214,6 +216,7 @@ setDataCache(
     STJson const& data,
     bool modified = true)
 {
+    // std::cout << "setDataCache: " << to_string(account) << data.getJson(JsonOptions::none).toStyledString() << std::endl;
     auto& dataMap = contractCtx.result.dataMap;
     auto& view = contractCtx.applyCtx.view();
 
@@ -244,6 +247,7 @@ setDataCache(
 
         dataMap.modifiedCount++;
         dataMap[account] = {modified, data};
+        // contractCtx.applyCtx.openView().setDataCache(account, data, modified);
         return HostFunctionError::SUCCESS;
     }
 
@@ -259,6 +263,7 @@ setDataCache(
     }
 
     dataMap[account] = {modified, data};
+    // contractCtx.applyCtx.openView().setDataCache(account, data, modified);
     return HostFunctionError::SUCCESS;
 }
 
@@ -413,9 +418,11 @@ ContractHostFunctionsImpl::setContractData(
 STJson
 getContractDataOrCache(ContractContext& contractCtx, AccountID const& account)
 {
+    // std::cout << "getContractDataOrCache: " << to_string(account) << std::endl;
     auto cacheEntryLookup = getDataCache(contractCtx, account);
     if (!cacheEntryLookup)
     {
+        // std::cout << "getContractDataOrCache.noCache: " << to_string(account) << std::endl;
         AccountID const& contractAccount = contractCtx.result.contractAccount;
         auto const dataKeylet = keylet::contractData(account, contractAccount);
         auto& view = contractCtx.applyCtx.view();
@@ -423,16 +430,19 @@ getContractDataOrCache(ContractContext& contractCtx, AccountID const& account)
         if (dataSle)
         {
             // Return the STJson from the SLE
+            // std::cout << "getContractDataOrCache.data: " << to_string(account) << std::endl;
             return dataSle->getFieldJson(sfContractJson);
         }
 
         // Return New STJson if not found
+        // std::cout << "getContractDataOrCache.noData: " << to_string(account) << std::endl;
         STJson data;
         return data;
     }
 
     // Return the cached STJson
     auto const& cacheEntry = cacheEntryLookup->get();
+    // std::cout << "getContractDataOrCache.cache: " << to_string(account) << std::endl;
     return cacheEntry.second;
 }
 
@@ -528,11 +538,13 @@ ContractHostFunctionsImpl::emitTxn(std::shared_ptr<STTx const> const& stxPtr)
     if (tpTrans->getStatus() != NEW)
         return Unexpected(HostFunctionError::SUBMIT_TXN_FAILURE);
 
-    std::cout << "Emitting Txn: " << stxPtr->getJson(JsonOptions::none).toStyledString() << std::endl;
+    if (contractCtx.openView.open())
+        return tesSUCCESS;
 
     // NOTE: SmartContract Txn Ordering
-    // contractCtx.applyCtx.apply(tesSUCCESS);
-    OpenView wholeBatchView(batch_view, contractCtx.applyCtx.openView());
+    std::cout << "Size: " << contractCtx.openView.itemsCount() << std::endl;
+
+    OpenView wholeBatchView(batch_view, contractCtx.openView);
     auto const parentTxId = parentTx.getTransactionID();
     auto applyOneTransaction = [&app, &j, &parentTxId, &wholeBatchView](
                                    std::shared_ptr<STTx const> const& tx) {
@@ -546,13 +558,13 @@ ContractHostFunctionsImpl::emitTxn(std::shared_ptr<STTx const> const& stxPtr)
 
         if (ret.applied && (isTesSuccess(ret.ter) || isTecClaim(ret.ter)))
             perTxBatchView.apply(wholeBatchView);
-
         return ret;
     };
 
     auto const result = applyOneTransaction(tpTrans->getSTransaction());
+    std::cout << "Size.1: " << wholeBatchView.itemsCount() << std::endl;
     if (result.applied)
-        wholeBatchView.apply(contractCtx.applyCtx.openView());
+        wholeBatchView.apply(contractCtx.openView);
     return TERtoInt(result.ter);
 }
 

@@ -202,6 +202,12 @@ public:
     std::size_t
     txCount() const;
 
+    std::size_t
+    itemsCount() const
+    {
+        return items_.itemsCount();
+    }
+
     /** Apply changes. */
     void
     apply(TxsRawView& to) const;

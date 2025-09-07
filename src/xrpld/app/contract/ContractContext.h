@@ -22,6 +22,7 @@
 
 #include <xrpld/app/misc/Transaction.h>
 #include <xrpld/app/tx/detail/ApplyContext.h>
+#include <xrpld/ledger/Sandbox.h>
 
 #include <xrpl/protocol/STData.h>
 #include <xrpl/protocol/STDataType.h>
@@ -88,6 +89,7 @@ struct ContractResult
 struct ContractContext
 {
     ripple::ApplyContext& applyCtx;
+    OpenView& openView;
     std::vector<ParameterValueVec> instanceParameters;
     std::vector<ParameterValueVec> functionParameters;
     std::vector<STObject> built_txns;
