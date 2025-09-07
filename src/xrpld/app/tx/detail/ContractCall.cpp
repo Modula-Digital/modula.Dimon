@@ -133,7 +133,6 @@ TER
 ContractCall::doApply()
 {
     AccountID const contractAccount = ctx_.tx[sfContractAccount];
-    std::cout << "ContractAccount.index: " << keylet::account(contractAccount).key << std::endl;
 
     // Use Peek because handleFlagParameters will update the SLE.
     auto const caSle = ctx_.view().peek(keylet::account(contractAccount));
@@ -246,35 +245,6 @@ ContractCall::doApply()
 
     ripple::ContractDataMap dataMap;
     ripple::ContractEventMap eventMap;
-    std::cout << "ctx_.view().size: " << ctx_.size() << std::endl;
-    std::cout << "ctx_.openView().TxCount: " << ctx_.openView().txCount() << std::endl;
-    std::cout << "ctx_.openView().ItemsCount: " << ctx_.openView().itemsCount() << std::endl;
-    OpenView batch_view(ctx_.openView());
-    ctx_.visit([&batch_view](ripple::uint256 const& key, bool isDelete,
-            std::shared_ptr<ripple::SLE const> const& before,
-            std::shared_ptr<ripple::SLE const> const& after)
-    {
-        // if (isDelete)
-        // {
-        //     if (before)
-        //     {
-        //         auto sle = ctx_.view().peek(key);
-        //         if (sle)
-        //             wholeBatchView.rawErase(sle);
-        //     }
-        // }
-        if (after)
-        {
-            auto sle = std::const_pointer_cast<ripple::SLE>(after);
-            if (before)
-                batch_view.rawReplace(sle);
-            else
-                batch_view.rawInsert(sle);
-        }
-    });
-    std::cout << "ctx_.view().size: " << ctx_.size() << std::endl;
-    std::cout << "ctx_.openView().TxCount: " << ctx_.openView().txCount() << std::endl;
-    std::cout << "ctx_.openView().ItemsCount: " << ctx_.openView().itemsCount() << std::endl;
     ContractContext contractCtx = {
         .applyCtx = ctx_,
         .instanceParameters = instanceParameters,
@@ -307,25 +277,11 @@ ContractCall::doApply()
         return tefINTERNAL;
     }
 
-    {
-        JLOG(j_.error()) << "ContractCall.Before: Account: " << account_ << " Balance: " << accountSle->getFieldAmount(sfBalance);
-        JLOG(j_.error()) << "ContractCall.Before: ContractAccount: " << contractAccount << " Balance: " << caSle->getFieldAmount(sfBalance);
-        JLOG(j_.error()) << "ContractCall.Before: Account: " << account_ << " Sequence: " << accountSle->getFieldU32(sfSequence);
-        JLOG(j_.error()) << "ContractCall.Before: ContractAccount: " << contractAccount << " Sequence: " << caSle->getFieldU32(sfSequence);
-    }
-
     std::uint32_t allowance = ctx_.tx[sfComputationAllowance];
     auto re = runEscrowWasm(wasm, funcName, {}, &ledgerDataProvider, allowance);
-    {
-        JLOG(j_.error()) << "ContractCall.After: Account: " << account_ << " Balance: " << accountSle->getFieldAmount(sfBalance);
-        JLOG(j_.error()) << "ContractCall.After: ContractAccount: " << contractAccount << " Balance: " << caSle->getFieldAmount(sfBalance);
-        JLOG(j_.error()) << "ContractCall.After: Account: " << account_ << " Sequence: " << accountSle->getFieldU32(sfSequence);
-        JLOG(j_.error()) << "ContractCall.After: ContractAccount: " << contractAccount << " Sequence: " << caSle->getFieldU32(sfSequence);
-    }
 
     // Create MetaData
-    ApplyViewImpl& avi =
-        dynamic_cast<ApplyViewImpl&>(ctx_.view());
+    ApplyViewImpl& avi = dynamic_cast<ApplyViewImpl&>(ctx_.view());
     STObject meta{sfContractExecution};
     meta.setAccountID(sfContractAccount, contractAccount);
     meta.setFieldH256(sfContractHash, contractHash);
@@ -349,6 +305,7 @@ ContractCall::doApply()
                 ctx_,
                 contractAccount,
                 contractCtx.result.dataMap,
+                contractCtx.result.eventMap,
                 ctx_.tx.getTransactionID());
             !isTesSuccess(res))
         {
@@ -357,12 +314,10 @@ ContractCall::doApply()
             return res;
         }
 
-        // for (auto const& [name, data] : contractCtx.result.eventMap)
-        //     contractCtx.applyCtx.app.getOPs().pubContractEvent(name, data);
-
         meta.setFieldU64(sfContractReturnCode, 0);
         meta.setFieldU8(sfContractResult, ripple::ExitType::ACCEPT);
         avi.addContractMetaData(std::move(meta));
+        ctx_.setEmittedTxns(contractCtx.result.emittedTxns);
         return tesSUCCESS;
     }
     else

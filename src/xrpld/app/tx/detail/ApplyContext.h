@@ -21,6 +21,7 @@
 #define RIPPLE_TX_APPLYCONTEXT_H_INCLUDED
 
 #include <xrpld/app/main/Application.h>
+#include <xrpld/app/misc/Transaction.h>
 #include <xrpld/core/Config.h>
 #include <xrpld/ledger/ApplyViewImpl.h>
 #include <xrpld/ledger/OpenViewSandbox.h>
@@ -128,6 +129,19 @@ public:
         wasmReturnCode_ = wasmReturnCode;
     }
 
+    /** Sets the gas used in the metadata */
+    void
+    setEmittedTxns(std::queue<std::shared_ptr<ripple::Transaction>> const emittedTxns)
+    {
+        emittedTxns_ = emittedTxns;
+    }
+
+    std::queue<std::shared_ptr<ripple::Transaction>>
+    getEmittedTxns()
+    {
+        return emittedTxns_;
+    }
+
     /** Discard changes and start fresh. */
     void
     discard();
@@ -183,6 +197,7 @@ private:
 
     std::optional<std::uint32_t> gasUsed_;
     std::optional<std::int32_t> wasmReturnCode_;
+    std::queue<std::shared_ptr<ripple::Transaction>> emittedTxns_;
     std::optional<uint256 const> parentTxId_;
 };
 

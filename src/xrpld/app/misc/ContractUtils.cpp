@@ -501,10 +501,14 @@ finalizeContractData(
     ApplyContext& applyCtx,
     AccountID const& contractAccount,
     ContractDataMap const& dataMap,
+    ContractEventMap const& eventMap,
     uint256 const& txnID)
 {
     auto const& j = applyCtx.app.journal("View");
     uint16_t changeCount = 0;
+
+    for (auto const& [name, data] : eventMap)
+        applyCtx.app.getOPs().pubContractEvent(name, data);
 
     for (auto const& accEntry : dataMap)
     {

@@ -83,6 +83,7 @@ struct ContractResult
     int64_t exitCode{-1};
     ContractDataMap dataMap;
     ContractEventMap eventMap;
+    std::queue<std::shared_ptr<ripple::Transaction>> emittedTxns{};
     std::size_t changedDataCount{0};
 };
 

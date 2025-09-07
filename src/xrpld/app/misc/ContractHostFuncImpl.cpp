@@ -538,33 +538,21 @@ ContractHostFunctionsImpl::emitTxn(std::shared_ptr<STTx const> const& stxPtr)
     if (tpTrans->getStatus() != NEW)
         return Unexpected(HostFunctionError::SUBMIT_TXN_FAILURE);
 
-    if (contractCtx.applyCtx.openView().open())
-        return tesSUCCESS;
-
-    // NOTE: SmartContract Txn Ordering
-    std::cout << "Size: " << contractCtx.applyCtx.openView().itemsCount() << std::endl;
-
     OpenView wholeBatchView(batch_view, contractCtx.applyCtx.openView());
     auto const parentTxId = parentTx.getTransactionID();
     auto applyOneTransaction = [&app, &j, &parentTxId, &wholeBatchView](
                                    std::shared_ptr<STTx const> const& tx) {
-        OpenView perTxBatchView(batch_view, wholeBatchView);
-        auto const ret = ripple::apply(
-            app, perTxBatchView, parentTxId, *tx, tapGENERATED, j);
+        auto const pfresult = preflight(app, wholeBatchView.rules(), parentTxId, *tx, tapGENERATED, j);
+        auto const ret = preclaim(pfresult, app, wholeBatchView);
         JLOG(j.error()) << "WASM [" << parentTxId
                         << "]: " << tx->getTransactionID() << " "
-                        << (ret.applied ? "applied" : "failure") << ": "
                         << transToken(ret.ter);
-
-        if (ret.applied && (isTesSuccess(ret.ter) || isTecClaim(ret.ter)))
-            perTxBatchView.apply(wholeBatchView);
         return ret;
     };
 
     auto const result = applyOneTransaction(tpTrans->getSTransaction());
-    std::cout << "Size.1: " << wholeBatchView.itemsCount() << std::endl;
-    if (result.applied)
-        wholeBatchView.apply(contractCtx.applyCtx.openView());
+    if (isTesSuccess(result.ter))
+        contractCtx.result.emittedTxns.push(tpTrans);
     return TERtoInt(result.ter);
 }
 

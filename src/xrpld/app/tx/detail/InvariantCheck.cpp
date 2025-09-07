@@ -157,13 +157,6 @@ XRPNotCreated::finalize(
         return false;
     }
 
-    // ContractCall can emit transactions; skip the negative net change check
-    // NOTE: SmartContract Txn Ordering
-    // if (tx.getTxnType() == ttCONTRACT_CALL)
-    //     return true;
-    if (tx.getTxnType() == ttCONTRACT_CALL && -drops_ > fee.drops())
-        return true;
-
     // The negative of the net change should be equal to actual fee charged.
     if (-drops_ != fee.drops())
     {

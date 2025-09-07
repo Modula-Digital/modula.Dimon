@@ -92,6 +92,7 @@ finalizeContractData(
     ApplyContext& applyCtx,
     AccountID const& contractAccount,
     ContractDataMap const& dataMap,
+    ContractEventMap const& eventMap,
     uint256 const& txnID);
 
 }  // namespace contract
