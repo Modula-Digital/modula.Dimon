@@ -52,13 +52,13 @@ create(jtx::Account const& account, uint256 const& contractHash)
 Json::Value
 modify(
     jtx::Account const& account,
-    std::string const& contractAccount,
+    jtx::Account const& contractAccount,
     std::string const& contractCode)
 {
     Json::Value jv;
     jv[jss::TransactionType] = jss::ContractModify;
     jv[jss::Account] = account.human();
-    jv[sfContractAccount] = contractAccount;
+    jv[sfContractAccount] = contractAccount.human();
     jv[sfContractCode] = contractCode;
     return jv;
 }
@@ -66,37 +66,37 @@ modify(
 Json::Value
 modify(
     jtx::Account const& account,
-    std::string const& contractAccount,
+    jtx::Account const& contractAccount,
     uint256 const& contractHash)
 {
     Json::Value jv;
     jv[jss::TransactionType] = jss::ContractModify;
     jv[jss::Account] = account.human();
-    jv[sfContractAccount] = contractAccount;
+    jv[sfContractAccount] = contractAccount.human();
     jv[sfContractHash] = to_string(contractHash);
     return jv;
 }
 
 Json::Value
-del(jtx::Account const& account, std::string const& contractAccount)
+del(jtx::Account const& account, jtx::Account const& contractAccount)
 {
     Json::Value jv;
     jv[jss::TransactionType] = jss::ContractDelete;
     jv[jss::Account] = account.human();
-    jv[sfContractAccount] = contractAccount;
+    jv[sfContractAccount] = contractAccount.human();
     return jv;
 }
 
 Json::Value
 call(
     jtx::Account const& account,
-    std::string const& contractAccount,
+    jtx::Account const& contractAccount,
     std::string const& functionName)
 {
     Json::Value jv;
     jv[jss::TransactionType] = jss::ContractCall;
     jv[jss::Account] = account.human();
-    jv[sfContractAccount] = contractAccount;
+    jv[sfContractAccount] = contractAccount.human();
     jv[sfFunctionName] = strHex(functionName);
     jv[sfParameters] = Json::Value(Json::arrayValue);
     return jv;

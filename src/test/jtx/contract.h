@@ -51,22 +51,22 @@ create(jtx::Account const& account, uint256 const& contractHash);
 Json::Value
 modify(
     jtx::Account const& account,
-    std::string const& contractAccount,
+    jtx::Account const& contractAccount,
     std::string const& contractCode);
 
 Json::Value
 modify(
     jtx::Account const& account,
-    std::string const& contractAccount,
+    jtx::Account const& contractAccount,
     uint256 const& contractHash);
 
 Json::Value
-del(jtx::Account const& account, std::string const& contractAccount);
+del(jtx::Account const& account, jtx::Account const& contractAccount);
 
 Json::Value
 call(
     jtx::Account const& account,
-    std::string const& contractAccount,
+    jtx::Account const& contractAccount,
     std::string const& functionName);
 
 /** Add Function on a JTx. */
