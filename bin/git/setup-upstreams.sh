@@ -6,7 +6,7 @@ then
   cat <<- USAGE
   Usage: $name <username>
 
-  Where <username> is the Github username of the upstream repo. e.g. XRPLF
+  Where <username> is the Github username of the upstream repo. e.g. DimonLedger
 USAGE
   exit 0
 fi
