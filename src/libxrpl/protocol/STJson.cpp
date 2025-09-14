@@ -171,21 +171,18 @@ STJson::makeValueFromVLWithType(SerialIter& sit)
             return std::make_shared<STAccount>(sit, sfAccount);
         case STI_AMOUNT:
             return std::make_shared<STAmount>(sit, sfAmount);
+        // case STI_NUMBER:
+        //     return std::make_shared<STNumber>(sit, sfNumber);
         case STI_ISSUE:
             return std::make_shared<STIssue>(sit, sfAsset);
         case STI_CURRENCY:
             return std::make_shared<STCurrency>(sit, sfBaseAsset);
-        // case STI_OBJECT:
-        //     return std::make_shared<STObject>(sit, sfTransactionMetaData, 0);
-        // case STI_ARRAY:
-        //     return std::make_shared<STArray>(sit, sfSigners);
-        // case STI_PATHSET:
-        //     // STPathSet(SerialIter&, SField const&)
-        //     return std::make_shared<STPathSet>(sit, sfGeneric);
-        // case STI_VECTOR256:
-        //     return std::make_shared<STVector256>(sit, sfGeneric);
         case STI_JSON:
             return std::make_shared<STJson>(sit, sfContractJson);
+        case STI_OBJECT:
+        case STI_ARRAY:
+        case STI_PATHSET:
+        case STI_VECTOR256:
         default:
             // Unknown type, treat as blob
             {

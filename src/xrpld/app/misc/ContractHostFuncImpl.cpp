@@ -22,7 +22,6 @@
 #include <xrpld/app/misc/Transaction.h>
 #include <xrpld/app/tx/apply.h>
 
-#include <xrpl/protocol/STData.h>
 #include <xrpl/protocol/STNumber.h>
 #include <xrpl/protocol/STParsedJSON.h>
 #include <xrpl/protocol/STTx.h>
@@ -30,7 +29,7 @@
 namespace ripple {
 
 Expected<Bytes, HostFunctionError>
-getFieldDataFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
+getFieldBytesFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId)
 {
     switch (stTypeId)
     {
@@ -169,7 +168,7 @@ ContractHostFunctionsImpl::instanceParam(
         return Unexpected(HostFunctionError::INDEX_OUT_OF_BOUNDS);
 
     ripple::STData const& instParam = instanceParams[index].value;
-    return getFieldDataFromSTData(instParam, stTypeId);
+    return getFieldBytesFromSTData(instParam, stTypeId);
 }
 
 Expected<Bytes, HostFunctionError>
@@ -183,7 +182,7 @@ ContractHostFunctionsImpl::functionParam(
         return Unexpected(HostFunctionError::INDEX_OUT_OF_BOUNDS);
 
     ripple::STData const& funcParam = funcParams[index].value;
-    return getFieldDataFromSTData(funcParam, stTypeId);
+    return getFieldBytesFromSTData(funcParam, stTypeId);
 }
 
 inline std::optional<std::reference_wrapper<std::pair<bool, STJson> const>>
@@ -250,39 +249,6 @@ setDataCache(
 
     dataMap[account] = {modified, data};
     return HostFunctionError::SUCCESS;
-}
-
-Expected<Bytes, HostFunctionError>
-ContractHostFunctionsImpl::getContractData(AccountID const& account)
-{
-    auto& view = contractCtx.applyCtx.view();
-    AccountID const& contractAccount = contractCtx.result.contractAccount;
-    auto const sleAccount = view.read(keylet::account(account));
-    if (!sleAccount)
-        return Unexpected(HostFunctionError::INVALID_ACCOUNT);
-
-    // first check if the requested state was previously cached this session
-    auto cacheEntryLookup = getDataCache(contractCtx, account);
-    if (cacheEntryLookup)
-    {
-        auto const& cacheEntry = cacheEntryLookup->get();
-        ripple::Blob const blob = cacheEntry.second.toBlob();
-        return Bytes{blob.begin(), blob.end()};
-    }
-
-    auto const dataKeylet = keylet::contractData(account, contractAccount);
-    auto const dataSle = view.read(dataKeylet);
-    if (!dataSle)
-        return Unexpected(HostFunctionError::INTERNAL);
-
-    auto const data = dataSle->getFieldJson(sfContractJson);
-    // it exists add it to cache and return it
-    if (setDataCache(contractCtx, account, data, false) !=
-        HostFunctionError::SUCCESS)
-        return Unexpected(HostFunctionError::INTERNAL);
-
-    ripple::Blob const dataBlob = data.toBlob();
-    return Bytes{dataBlob.begin(), dataBlob.end()};
 }
 
 Expected<Bytes, HostFunctionError>
@@ -384,22 +350,6 @@ ContractHostFunctionsImpl::getNestedContractDataFromKey(
         s.peekData().data(), s.peekData().data() + s.peekData().size()};
 }
 
-Expected<int32_t, HostFunctionError>
-ContractHostFunctionsImpl::setContractData(
-    AccountID const& account,
-    STJson const& data)
-{
-    uint32_t maxSize = 1024U;
-    if (data.toBlob().size() > maxSize)
-        return Unexpected(HostFunctionError::DATA_FIELD_TOO_LARGE);
-
-    if (HostFunctionError ret = setDataCache(contractCtx, account, data, true);
-        ret != HostFunctionError::SUCCESS)
-        return Unexpected(ret);
-
-    return Unexpected(HostFunctionError::INTERNAL);
-}
-
 STJson
 getContractDataOrCache(ContractContext& contractCtx, AccountID const& account)
 {
@@ -481,19 +431,34 @@ ContractHostFunctionsImpl::addTxnField(
     SField const& field,
     Slice const& data)
 {
-    // Get the transaction JSON
+    auto j = getJournal();
+    if (index >= contractCtx.built_txns.size())
+    {
+        JLOG(j.trace()) << "addTxnField: index out of bounds: " << index;
+        return Unexpected(HostFunctionError::INDEX_OUT_OF_BOUNDS);
+    }
+
+    // Get the transaction STObject
     auto& obj = contractCtx.built_txns[index];
-    // std::cout << "Building Txn: " << obj << std::endl;
-    std::cout << "Adding field: " << field.getName()
-              << " with data size: " << data.size() << std::endl;
 
-    // Get the transaction type format
-    auto txFormat = TxFormats::getInstance().findByType(
-        safe_cast<TxType>(std::uint16_t{0}));
-    if (!txFormat)
+    // Ensure the transaction has a TransactionType field
+    if (!obj.isFieldPresent(sfTransactionType))
+    {
+        JLOG(j.trace()) << "TransactionType field not present in transaction.";
         return Unexpected(HostFunctionError::FIELD_NOT_FOUND);
+    }
 
-    // Check if the field is allowed in the transaction format
+    // Extract the numeric tx type from the STObject and convert to TxType
+    auto txTypeVal = obj.getFieldU16(sfTransactionType);
+    auto txFormat =
+        TxFormats::getInstance().findByType(safe_cast<TxType>(txTypeVal));
+    if (!txFormat)
+    {
+        JLOG(j.trace()) << "Invalid TransactionType: " << txTypeVal;
+        return Unexpected(HostFunctionError::FIELD_NOT_FOUND);
+    }
+
+    // Check if the provided field is allowed for this transaction type
     bool found = false;
     for (auto const& e : txFormat->getSOTemplate())
     {
@@ -504,10 +469,59 @@ ContractHostFunctionsImpl::addTxnField(
         }
     }
     if (!found)
+    {
+        JLOG(j.trace()) << "Field " << field.getName()
+                        << " not allowed in transaction type "
+                        << txFormat->getName();
         return Unexpected(HostFunctionError::FIELD_NOT_FOUND);
+    }
 
     obj.addFieldFromSlice(field, data);
-    return 0;
+    JLOG(j.error()) << "BUILT TXN: " << obj.getJson(JsonOptions::none).toStyledString();
+    return static_cast<int32_t>(HostFunctionError::SUCCESS);
+}
+
+Expected<int32_t, HostFunctionError>
+ContractHostFunctionsImpl::emitBuiltTxn(std::uint32_t const& index)
+{
+    try
+    {
+        if (index >= contractCtx.built_txns.size())
+            return Unexpected(HostFunctionError::INDEX_OUT_OF_BOUNDS);
+
+        auto stxPtr = std::make_shared<STTx>(std::move(contractCtx.built_txns[index]));
+        
+        auto& app = contractCtx.applyCtx.app;
+        auto& parentTx = contractCtx.applyCtx.tx;
+        auto j = getJournal();
+
+        std::string reason;
+        auto tpTrans = std::make_shared<Transaction>(stxPtr, reason, app);
+        if (tpTrans->getStatus() != NEW)
+            return Unexpected(HostFunctionError::SUBMIT_TXN_FAILURE);
+
+        OpenView wholeBatchView(batch_view, contractCtx.applyCtx.openView());
+        auto const parentTxId = parentTx.getTransactionID();
+        auto applyOneTransaction = [&app, &j, &parentTxId, &wholeBatchView](
+                                    std::shared_ptr<STTx const> const& tx) {
+            auto const pfresult = preflight(
+                app, wholeBatchView.rules(), parentTxId, *tx, tapGENERATED, j);
+            auto const ret = preclaim(pfresult, app, wholeBatchView);
+            JLOG(j.trace()) << "WASM [" << parentTxId
+                            << "]: " << tx->getTransactionID() << " "
+                            << transToken(ret.ter);
+            return ret;
+        };
+
+        auto const result = applyOneTransaction(tpTrans->getSTransaction());
+        if (isTesSuccess(result.ter))
+            contractCtx.result.emittedTxns.push(tpTrans);
+        return TERtoInt(result.ter);
+    }
+    catch (std::exception const&)
+    {
+        return Unexpected(HostFunctionError::INTERNAL);
+    }
 }
 
 Expected<int32_t, HostFunctionError>

@@ -1669,7 +1669,7 @@ instanceParam_wrap(
     auto* hf = reinterpret_cast<HostFunctions*>(env);
     auto const* rt = reinterpret_cast<InstanceWrapper const*>(hf->getRT());
     int index = 0;
-    if (params->data[1].of.i32 > maxWasmDataLength)
+    if (params->data[3].of.i32 > maxWasmDataLength)
     {
         return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
     }
@@ -1699,7 +1699,7 @@ functionParam_wrap(
     auto* hf = reinterpret_cast<HostFunctions*>(env);
     auto const* rt = reinterpret_cast<InstanceWrapper const*>(hf->getRT());
     int index = 0;
-    if (params->data[1].of.i32 > maxWasmDataLength)
+    if (params->data[3].of.i32 > maxWasmDataLength)
     {
         return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
     }
@@ -1718,29 +1718,6 @@ functionParam_wrap(
 
     return returnResult(
         rt, params, results, hf->functionParam(*iindex, *stTypeId), index);
-}
-
-wasm_trap_t*
-getContractData_wrap(
-    void* env,
-    wasm_val_vec_t const* params,
-    wasm_val_vec_t* results)
-{
-    auto* hf = reinterpret_cast<HostFunctions*>(env);
-    auto const* rt = reinterpret_cast<InstanceWrapper const*>(hf->getRT());
-    int index = 0;
-    if (params->data[1].of.i32 > maxWasmDataLength)
-    {
-        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
-    }
-
-    auto const acc = getDataAccountID(rt, params, index);
-    if (!acc)
-    {
-        return hfResult(results, acc.error());
-    }
-
-    return returnResult(rt, params, results, hf->getContractData(*acc), index);
 }
 
 wasm_trap_t*
@@ -1763,10 +1740,20 @@ getContractDataFromKey_wrap(
         return hfResult(results, acc.error());
     }
 
+    if (params->data[3].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
+    }
+
     auto const key = getDataString(rt, params, index);
     if (!key)
     {
         return hfResult(results, key.error());
+    }
+
+    if (params->data[5].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
     }
 
     return returnResult(
@@ -1793,10 +1780,20 @@ getNestedContractDataFromKey_wrap(
         return hfResult(results, acc.error());
     }
 
+    if (params->data[3].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
+    }
+
     auto const nested = getDataString(rt, params, index);
     if (!nested)
     {
         return hfResult(results, nested.error());
+    }
+
+    if (params->data[5].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
     }
 
     auto const key = getDataString(rt, params, index);
@@ -1805,44 +1802,17 @@ getNestedContractDataFromKey_wrap(
         return hfResult(results, key.error());
     }
 
+    if (params->data[7].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
+    }
+
     return returnResult(
         rt,
         params,
         results,
         hf->getNestedContractDataFromKey(*acc, *nested, *key),
         index);
-}
-
-wasm_trap_t*
-setContractData_wrap(
-    void* env,
-    wasm_val_vec_t const* params,
-    wasm_val_vec_t* results)
-{
-    auto* hf = reinterpret_cast<HostFunctions*>(env);
-    auto const* rt = reinterpret_cast<InstanceWrapper const*>(hf->getRT());
-    int index = 0;
-    if (params->data[1].of.i32 > maxWasmDataLength)
-    {
-        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
-    }
-
-    auto const acc = getDataAccountID(rt, params, index);
-    if (!acc)
-    {
-        return hfResult(results, acc.error());
-    }
-
-    auto const data = getDataSlice(rt, params, index);
-    if (!data)
-    {
-        return hfResult(results, data.error());
-    }
-
-    auto parsed = STJson::fromBlob(data->data(), data->size());
-
-    return returnResult(
-        rt, params, results, hf->setContractData(*acc, *parsed), index);
 }
 
 wasm_trap_t*
@@ -1865,10 +1835,20 @@ setContractDataFromKey_wrap(
         return hfResult(results, acc.error());
     }
 
+    if (params->data[3].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
+    }
+
     auto const key = getDataString(rt, params, index);
     if (!key)
     {
         return hfResult(results, key.error());
+    }
+
+    if (params->data[5].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
     }
 
     auto const data = getDataSlice(rt, params, index);
@@ -1907,16 +1887,31 @@ setNestedContractDataFromKey_wrap(
         return hfResult(results, acc.error());
     }
 
+    if (params->data[3].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
+    }
+
     auto const nested = getDataString(rt, params, index);
     if (!nested)
     {
         return hfResult(results, nested.error());
     }
 
+    if (params->data[5].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
+    }
+
     auto const key = getDataString(rt, params, index);
     if (!key)
     {
         return hfResult(results, key.error());
+    }
+
+    if (params->data[7].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
     }
 
     auto const data = getDataSlice(rt, params, index);
@@ -1961,7 +1956,7 @@ addTxnField_wrap(void* env, wasm_val_vec_t const* params, wasm_val_vec_t* result
     auto* hf = reinterpret_cast<HostFunctions*>(env);
     auto const* rt = reinterpret_cast<InstanceWrapper const*>(hf->getRT());
     int index = 0;
-    if (params->data[1].of.i32 > maxWasmDataLength)
+    if (params->data[3].of.i32 > maxWasmDataLength)
     {
         return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
     }
@@ -1985,6 +1980,26 @@ addTxnField_wrap(void* env, wasm_val_vec_t const* params, wasm_val_vec_t* result
     }
 
     return returnResult(rt, params, results, hf->addTxnField(*txnIndex, *fname, *data), index);
+}
+
+wasm_trap_t*
+emitBuiltTxn_wrap(void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results)
+{
+    auto* hf = reinterpret_cast<HostFunctions*>(env);
+    auto const* rt = reinterpret_cast<InstanceWrapper const*>(hf->getRT());
+    int index = 0;
+    if (params->data[1].of.i32 > maxWasmDataLength)
+    {
+        return hfResult(results, HostFunctionError::DATA_FIELD_TOO_LARGE);
+    }
+
+    auto const txnIndex = getDataInt32(rt, params, index);
+    if (!txnIndex)
+    {
+        return hfResult(results, txnIndex.error());
+    }
+
+    return returnResult(rt, params, results, hf->emitBuiltTxn(*txnIndex), index);
 }
 
 wasm_trap_t*

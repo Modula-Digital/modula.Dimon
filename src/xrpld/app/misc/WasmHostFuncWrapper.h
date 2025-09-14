@@ -512,15 +512,6 @@ functionParam_wrap(
     wasm_val_vec_t const* params,
     wasm_val_vec_t* results);
 
-using getContractData_proto = int32_t(uint8_t*, int32_t, uint8_t*, int32_t);
-wasm_trap_t*
-getContractData_wrap(
-    void* env,
-    wasm_val_vec_t const* params,
-    wasm_val_vec_t* results);
-
-using setContractData_proto = int32_t(uint8_t*, int32_t, uint8_t*, int32_t);
-
 using getContractDataFromKey_proto =
     int32_t(uint8_t*, int32_t, uint8_t const*, int32_t, uint8_t*, int32_t);
 wasm_trap_t*
@@ -540,13 +531,6 @@ using getNestedContractDataFromKey_proto = int32_t(
     int32_t);
 wasm_trap_t*
 getNestedContractDataFromKey_wrap(
-    void* env,
-    wasm_val_vec_t const* params,
-    wasm_val_vec_t* results);
-
-using setContractData_proto = int32_t(uint8_t*, int32_t, uint8_t*, int32_t);
-wasm_trap_t*
-setContractData_wrap(
     void* env,
     wasm_val_vec_t const* params,
     wasm_val_vec_t* results);
@@ -578,9 +562,13 @@ using buildTxn_proto = int32_t(int32_t);
 wasm_trap_t*
 buildTxn_wrap(void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results);
 
-using addTxnField_proto = int32_t(int32_t, int32_t, uint8_t*, int32_t);
+using addTxnField_proto = int32_t(int32_t, int32_t, uint8_t const*, int32_t);
 wasm_trap_t*
 addTxnField_wrap(void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results);
+
+using emitBuiltTxn_proto = int32_t(int32_t);
+wasm_trap_t*
+emitBuiltTxn_wrap(void* env, wasm_val_vec_t const* params, wasm_val_vec_t* results);
 
 using emitTxn_proto = int32_t(uint8_t const*, int32_t);
 wasm_trap_t*

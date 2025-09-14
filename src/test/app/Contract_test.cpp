@@ -332,6 +332,7 @@ class Contract_test : public beast::unit_test::suite
 
         auto const wasmBytes =
             strUnHex(jt.jv[sfContractCode.jsonName].asString());
+        std::cout << "WASM Size: " << wasmBytes->size() << std::endl;
         uint256 const contractHash = ripple::sha512Half_s(
             ripple::Slice(wasmBytes->data(), wasmBytes->size()));
         auto const [contractKey, sle] = contractKeyAndSle(
@@ -1361,9 +1362,9 @@ class Contract_test : public beast::unit_test::suite
     // }
 
     void
-    testEmitTxn(FeatureBitset features)
+    testEmit(FeatureBitset features)
     {
-        testcase("emit txn");
+        testcase("emit");
 
         using namespace jtx;
 
@@ -1374,7 +1375,7 @@ class Contract_test : public beast::unit_test::suite
         env.fund(XRP(10'000), alice, bob);
         env.close();
 
-        std::string contractWasmStr = loadContractWasmStr("submit");
+        std::string contractWasmStr = loadContractWasmStr("emit");
 
         auto const [contractAccount, contractHash, _] = submitContract(
             env,
@@ -1384,6 +1385,46 @@ class Contract_test : public beast::unit_test::suite
                 tfSendAmount, "value", "AMOUNT", XRP(2000)),
             contract::add_function("emit", {}),
             fee(XRP(200)));
+
+        env(contract::call(alice, contractAccount, "emit"),
+            escrow::comp_allowance(1000000),
+            ter(tesSUCCESS));
+        env.close();
+    }
+
+    void
+    testEmitV2(FeatureBitset features)
+    {
+        testcase("emit v2");
+
+        using namespace jtx;
+
+        test::jtx::Env env{*this, features};
+
+        auto const alice = Account{"alice"};
+        auto const bob = Account{"bob"};
+        env.fund(XRP(10'000), alice, bob);
+        env.close();
+
+        std::string contractWasmStr = loadContractWasmStr("emit_v2");
+
+        auto const [contractAccount, contractHash, _] = submitContract(
+            env,
+            tesSUCCESS,
+            contract::create(alice, contractWasmStr),
+            contract::add_instance_param(
+                tfSendAmount, "value", "AMOUNT", XRP(2000)),
+            contract::add_function("emit", {}),
+            fee(XRP(200)));
+
+        // {
+        //     Json::Value params;
+        //     params[jss::ledger_index] = env.current()->seq() - 1;
+        //     params[jss::transactions] = true;
+        //     params[jss::expand] = true;
+        //     auto const jrr = env.rpc("json", "ledger", to_string(params));
+        //     std::cout << jrr << std::endl;
+        // }
 
         env(contract::call(alice, contractAccount, "emit"),
             escrow::comp_allowance(1000000),
@@ -1572,8 +1613,9 @@ class Contract_test : public beast::unit_test::suite
         // testContractDataV2(features);
         // testContractDataAdvanced(features);
         // testParameters(features);
-        // testEmitTxn(features);
-        testNestedEmitTxn(features);
+        // testEmit(features);
+        testEmitV2(features);
+        // testNestedEmitTxn(features);
         // testEvents(features);
     }
 

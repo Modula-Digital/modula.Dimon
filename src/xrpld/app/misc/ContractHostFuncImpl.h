@@ -38,14 +38,14 @@ public:
     {
     }
 
+    // Expected<Bytes, HostFunctionError>
+    // getFieldBytesFromSTData(ripple::STData const& funcParam, std::uint32_t stTypeId);
+
     Expected<Bytes, HostFunctionError>
     instanceParam(std::uint32_t index, std::uint32_t stTypeId) override;
 
     Expected<Bytes, HostFunctionError>
     functionParam(std::uint32_t index, std::uint32_t stTypeId) override;
-
-    Expected<Bytes, HostFunctionError>
-    getContractData(AccountID const& account) override;
 
     Expected<Bytes, HostFunctionError>
     getContractDataFromKey(
@@ -57,9 +57,6 @@ public:
         AccountID const& account,
         std::string_view const& nestedKeyName,
         std::string_view const& keyName) override;
-
-    Expected<int32_t, HostFunctionError>
-    setContractData(AccountID const& account, STJson const& data) override;
 
     Expected<int32_t, HostFunctionError>
     setContractDataFromKey(
@@ -79,6 +76,9 @@ public:
 
     Expected<int32_t, HostFunctionError>
     addTxnField(std::uint32_t const& index, SField const& field, Slice const& data) override;
+
+    Expected<int32_t, HostFunctionError>
+    emitBuiltTxn(std::uint32_t const& index) override;
 
     Expected<int32_t, HostFunctionError>
     emitTxn(std::shared_ptr<STTx const> const& stxPtr) override;

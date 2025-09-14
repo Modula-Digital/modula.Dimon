@@ -486,12 +486,6 @@ struct HostFunctions
     }
 
     virtual Expected<Bytes, HostFunctionError>
-    getContractData(AccountID const& account)
-    {
-        return Unexpected(HostFunctionError::INTERNAL);
-    }
-
-    virtual Expected<Bytes, HostFunctionError>
     getContractDataFromKey(
         AccountID const& account,
         std::string_view const& keyName)
@@ -504,12 +498,6 @@ struct HostFunctions
         AccountID const& account,
         std::string_view const& nestedKeyName,
         std::string_view const& keyName)
-    {
-        return Unexpected(HostFunctionError::INTERNAL);
-    }
-
-    virtual Expected<int32_t, HostFunctionError>
-    setContractData(AccountID const& account, STJson const& data)
     {
         return Unexpected(HostFunctionError::INTERNAL);
     }
@@ -541,6 +529,12 @@ struct HostFunctions
 
     virtual Expected<int32_t, HostFunctionError>
     addTxnField(std::uint32_t const& index, SField const& field, Slice const& data)
+    {
+        return Unexpected(HostFunctionError::INTERNAL);
+    }
+
+    virtual Expected<int32_t, HostFunctionError>
+    emitBuiltTxn(std::uint32_t const& index)
     {
         return Unexpected(HostFunctionError::INTERNAL);
     }
