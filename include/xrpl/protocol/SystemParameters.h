@@ -34,14 +34,15 @@ namespace ripple {
 static inline std::string const&
 systemName()
 {
-    static std::string const name = "ripple";
+    static std::string const name = "dimon";
     return name;
 }
 
 /** Configure the native currency. */
 
 /** Number of drops in the genesis account. */
-constexpr XRPAmount INITIAL_XRP{100'000'000'000 * DROPS_PER_XRP};
+// 1,010,719,990 DIMON expressed in drops
+constexpr XRPAmount INITIAL_XRP{1'010'719'990 * DROPS_PER_XRP};
 
 /** Returns true if the amount does not exceed the initial XRP in existence. */
 inline bool
@@ -62,7 +63,7 @@ isLegalAmountSigned(XRPAmount const& amount)
 static inline std::string const&
 systemCurrencyCode()
 {
-    static std::string const code = "XRP";
+    static std::string const code = "DMX";
     return code;
 }
 
